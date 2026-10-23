@@ -10,6 +10,8 @@
 
 界面是 DSH 侧边栏里的**原生 React 面板**，后端逻辑跑在 **DSH 进程内**、挂在 DSH 自己的 HTTP 服务 `/api-hub` 路由下：不额外开端口、不启子进程、不加载任何网页。
 
+![API Hub 面板](docs/screenshot.png)
+
 ## 功能
 
 **接口页**

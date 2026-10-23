@@ -37,7 +37,8 @@
     "assets",
     "cordis.patch.yml",
     "providers.example.json",
-    "LICENSE"
+    "LICENSE",
+    "docs/screenshot.png"
   ],
   "dsh": {
     "bundle": {
