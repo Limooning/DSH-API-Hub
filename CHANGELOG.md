@@ -3,6 +3,18 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.6.3
+
+**目标：视觉是被证明的，不是被猜的。**
+
+- **视觉实测**：名字看不出眼睛的模型（典型是 `qwen3.8-max`——纯文本家族里能读图的旗舰）现在会被真的问一句：发一张 16×16 的纯红图 +「这张图是什么颜色」。答得出来就把 `视觉` 加到该接口上，答不出来就老实只写 `文本`；结论存在 `provider.vision: { tested, ok, status, model, note, at }` 里
+- 添加接口时自动跑一次（`POST /api/providers/add`，可用 `checkVision: false` 跳过）；已有接口可随时用 `POST /api/vision { id, model? }` 重测，结果落盘
+- 视觉只增不减：实测失败不会把名字已经写明的 `视觉` 抹掉，失败原因记在 `note`（例如 `model does not support image input`）
+- 名称表补上更多多模态家族：`qwen3-max` / `qwen3-plus` / `qwen-max`、`o3` / `o4`、`glm-4.6` / `glm-5`、`kimi-k2`、`doubao-seed`、`grok-4`、`step-3v`
+- 卡片上的类型拆成独立小标签（`文本` `视觉` `图片` …），视觉用紫色单独标出，鼠标悬停显示依据：是实测通过、实测失败还是仅按名字推断
+- `GET /api/state` 的 provider 里多返回 `vision`
+- 新增单测：一个假中转真的接受图片就加 `视觉`，另一个回 400 就不加；`/api/vision` 重测返回模型的原话
+
 ## 0.6.2
 
 **目标：类型看得到，跟着勾选的模型走。**

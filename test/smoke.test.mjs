@@ -196,6 +196,95 @@ test("a live call decides whether a discovered endpoint can be imported", () => 
   }
 });
 
+// A model name is a hint. qwen3.8-max is a text model that happens to read
+// images, so the panel asks the API itself and keeps the verdict.
+const VISION = `
+import http from "node:http";
+import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+
+const eyes = http.createServer((req, res) => {
+  res.writeHead(200, { "content-type": "application/json" });
+  if (req.url.includes("/chat/completions")) {
+    return res.end(JSON.stringify({ choices: [{ message: { content: "红色" } }] }));
+  }
+  res.end(JSON.stringify({ data: [{ id: "atlas-x" }] }));
+});
+const blind = http.createServer((req, res) => {
+  if (req.url.includes("/chat/completions")) {
+    res.writeHead(400, { "content-type": "application/json" });
+    return res.end(JSON.stringify({ error: { message: "model does not support image input" } }));
+  }
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end(JSON.stringify({ data: [{ id: "atlas-y" }] }));
+});
+await new Promise((done) => eyes.listen(0, "127.0.0.1", done));
+await new Promise((done) => blind.listen(0, "127.0.0.1", done));
+
+const panel = http.createServer(async (req, res) => {
+  try { await handleRequest(req, res, ""); } catch (e) { res.writeHead(500); res.end(String(e)); }
+});
+await new Promise((done) => panel.listen(0, "127.0.0.1", done));
+
+const api = async (path, body) => {
+  const res = await fetch("http://127.0.0.1:" + panel.address().port + path, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  return { code: res.status, body: await res.json() };
+};
+
+const add = (port, name, model) => api("/api/providers/add", {
+  baseURL: "http://127.0.0.1:" + port + "/v1", key: "sk-atlas-" + port, name,
+  models: [{ id: model }], selected: [model], defaultModel: model,
+});
+const withEyes = await add(eyes.address().port, "有眼睛", "atlas-x");
+const noEyes = await add(blind.address().port, "没眼睛", "atlas-y");
+const retest = await api("/api/vision", { id: withEyes.body.id });
+
+const find = (state, id) => state.providers.find((p) => p.id === id);
+const out = {
+  eyesOk: withEyes.body.vision?.ok,
+  
+  
+  eyesTypes: find(withEyes.body, withEyes.body.id)?.types,
+  blindOk: noEyes.body.vision?.ok,
+  blindTypes: find(noEyes.body, noEyes.body.id)?.types,
+  blindNote: noEyes.body.vision?.note,
+  retestOk: retest.body.ok,
+  retestNote: retest.body.note,
+};
+eyes.close(); blind.close(); panel.close();
+console.log("VISION " + JSON.stringify(out));
+`;
+
+function visionInFreshHome() {
+  const home = mkdtempSync(join(tmpdir(), "api-hub-vision-"));
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", VISION], {
+    env: { ...process.env, USERPROFILE: home, HOME: home },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, "vision probe failed:\n" + result.stderr);
+  const line = result.stdout.split("\n").find((row) => row.startsWith("VISION "));
+  assert.ok(line, "vision probe produced no result:\n" + result.stdout);
+  return { home, out: JSON.parse(line.slice("VISION ".length)) };
+}
+
+test("vision is proven by a real image call, not by the model name", () => {
+  const { home, out } = visionInFreshHome();
+  try {
+    assert.equal(out.eyesOk, true);
+    assert.deepEqual(out.eyesTypes, ["llm", "vision"]);
+
+    assert.equal(out.blindOk, false);
+    assert.deepEqual(out.blindTypes, ["llm"]);
+    assert.match(out.blindNote, /image input/);
+
+    assert.equal(out.retestOk, true);
+    assert.equal(out.retestNote, "红色");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // Other tools write TOML / .env rather than JSON, and some relays want the key in
 // `x-api-key` instead of `Authorization`. Both have to survive the round trip:
 // scan → import → a real call through the panel.
