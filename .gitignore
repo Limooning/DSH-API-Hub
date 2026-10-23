@@ -3,6 +3,7 @@ providers.json
 keys/
 backups/
 scan-sources.json
+skill-tags.json
 *.bak
 *.bak-*
 

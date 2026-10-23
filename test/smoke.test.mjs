@@ -14,7 +14,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SERVER_URL = pathToFileURL(fileURLToPath(new URL("../lib/server.mjs", import.meta.url))).href;
 
 const PROBE = `
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+const home = process.env.USERPROFILE || process.env.HOME;
 const call = async (path) => {
   const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
   const req = { method: "GET", url: path, headers: {}, on(event, cb) { if (event === "end") cb(); return this; } };
@@ -33,15 +36,30 @@ const post = async (path, body) => {
 };
 const out = {};
 for (const path of ["/api/health", "/api/state", "/api/skills", "/api/nope"]) out[path] = await call(path);
-out.rename = await post("/api/panel/title", { title: "  接口\\n台  " });
-out.renameEmpty = await post("/api/panel/title", { title: "   " });
-out.afterRename = await call("/api/state");
+out.rename = null;
+out.renameEmpty = null;
+out.afterRename = null;
 const first = JSON.parse(out["/api/state"].body).providers[0].id;
 out.firstId = first;
 out.cardRename = await post("/api/providers/rename", { id: first, name: "  我的 中转\\n " });
 out.cardRenameEmpty = await post("/api/providers/rename", { id: first, name: " " });
 out.cardRenameUnknown = await post("/api/providers/rename", { id: "nope", name: "x" });
 out.afterCardRename = await call("/api/state");
+
+// A skill to rename and tag: the smallest SKILL.md DSH would accept.
+const skillDir = join(home, ".dsh", "skills", "demo-skill");
+mkdirSync(skillDir, { recursive: true });
+writeFileSync(join(skillDir, "SKILL.md"), "---\\nname: demo-skill\\ndescription: 演示技能\\n---\\n\\n正文一行\\n", "utf8");
+out.skillRename = await post("/api/skills/rename", { id: "demo-skill", name: "  演示   技能  " });
+out.skillRenameEmpty = await post("/api/skills/rename", { id: "demo-skill", name: "  " });
+out.skillRenameUnknown = await post("/api/skills/rename", { id: "nope", name: "x" });
+out.skillTags = await post("/api/skills/tags", { id: "demo-skill", tags: ["写作", " 写作 ", "图像", ""] });
+out.afterTags = await call("/api/skills");
+out.tagsFileAfterSet = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
+out.skillTagsCleared = await post("/api/skills/tags", { id: "demo-skill", tags: [] });
+out.skillTagsUnknown = await post("/api/skills/tags", { id: "nope", tags: ["x"] });
+out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
+out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 console.log("PROBE " + JSON.stringify(out));
 `;
 
@@ -99,12 +117,6 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out["/api/skills"].code, 200);
     assert.deepEqual(JSON.parse(out["/api/skills"].body).skills, []);
 
-    // Double-clicking the title writes here; whitespace-only names are refused.
-    assert.equal(out.rename.code, 200);
-    assert.equal(JSON.parse(out.rename.body).title, "接口 台");
-    assert.equal(out.renameEmpty.code, 400);
-    assert.equal(JSON.parse(out.afterRename.body).title, "接口 台");
-
     // A card title is the user's label for that endpoint, not an identifier:
     // rename it, keep the id, and refuse blank or unknown ones.
     assert.equal(out.cardRename.code, 200);
@@ -113,6 +125,28 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(JSON.parse(out.afterCardRename.body).providers[0].id, out.firstId);
     assert.equal(out.cardRenameEmpty.code, 400);
     assert.equal(out.cardRenameUnknown.code, 404);
+
+    // Renaming a skill rewrites only the `name:` line of its frontmatter.
+    assert.equal(out.skillRename.code, 200);
+    assert.equal(JSON.parse(out.skillRename.body).name, "演示 技能");
+    assert.match(out.skillMd, /^---\nname: 演示 技能\n/);
+    assert.match(out.skillMd, /description: 演示技能/);
+    assert.match(out.skillMd, /正文一行/);
+    assert.equal(out.skillRenameEmpty.code, 400);
+    assert.equal(out.skillRenameUnknown.code, 404);
+
+    // Tags are the hub's own filing: trimmed, de-duplicated, kept outside the
+    // skill folder, and visible on the next list call.
+    const tagged = JSON.parse(out.skillTags.body);
+    assert.equal(out.skillTags.code, 200);
+    assert.deepEqual(tagged.tags, ["图像", "写作"].sort((a, b) => a.localeCompare(b, "zh-Hans-CN")));
+    const listed = JSON.parse(out.afterTags.body).skills.find((s) => s.id === "demo-skill");
+    assert.deepEqual(listed.tags, ["写作", "图像"]);
+    assert.deepEqual(JSON.parse(out.afterTags.body).tags, tagged.tags);
+    assert.deepEqual(JSON.parse(out.tagsFileAfterSet)["demo-skill"], ["写作", "图像"]);
+    assert.equal(out.skillTagsCleared.code, 200);
+    assert.deepEqual(JSON.parse(out.tagsFile)["demo-skill"], undefined);
+    assert.equal(out.skillTagsUnknown.code, 404);
 
     assert.equal(existsSync(join(home, ".dsh", "api-hub", "providers.json")), true);
   } finally {
