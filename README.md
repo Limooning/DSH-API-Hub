@@ -27,7 +27,7 @@
 - **移除**：确认后移出面板；面板自己管理的 Key 文件会一并删除
 - **拖拽排序**：拖动卡片调整顺序，写回 `providers.json` 的数组顺序
 - **＋ 添加接口**：填 Base URL 和 Key → 自动探测模型目录 → 勾选模型 → 保存
-- **检索本机**：扫描 DSH 凭据库和环境变量里的 API Key、以及 Codex 等其它 agent 工具的技能目录，识别出的条目点一下就能导入/复制（不点不写任何东西）
+- **检索本机**：一个对话框里分四组——已在面板管理的接口、DSH 凭据库 / 环境变量里未导入的 Key、已知第三方配置文件（`~/.config/jws-image`、`~/.codex/88api-image-gen-config.json`）、以及 Codex `config.toml` 里的 `model_providers`；技能目录也一并列出。识别到的条目点一下就能导入/复制，不点不写任何东西
 
 **技能页**
 
@@ -43,7 +43,7 @@
 dsh plugin --profile desktop add dsh-api-hub
 
 # 从本地 tarball（Release 附件）
-dsh plugin --profile desktop add C:\path\dsh-api-hub-0.5.0.tgz
+dsh plugin --profile desktop add C:\path\dsh-api-hub-0.5.1.tgz
 
 # 从源码（开发态，改动即时生效）
 dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub
@@ -159,7 +159,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.5.0**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.5.1**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新

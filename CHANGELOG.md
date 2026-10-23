@@ -3,6 +3,12 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.5.1
+
+- 检索对话框改成四组：已管理、未导入的 Key、其它工具的配置文件、Codex `model_providers`
+- 新增对已知第三方配置文件的扫描：`~/.config/jws-image/config.json`、`~/.codex/88api-image-gen-config.json`（导入后仍读原文件，不复制 Key）
+- 新增对 `~/.codex/config.toml` 里 `[model_providers.*]` 的识别（`base_url` / `env_key`）
+- 已在 `providers.json` 里的接口现在会显示在「已管理」组，不再看起来像“只找到了一个”
 ## 0.5.0
 
 - 新增「检索」：扫描 DSH 凭据库、环境变量里的 API Key，以及 Codex / Claude / agents 的技能目录
