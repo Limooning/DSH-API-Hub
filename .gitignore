@@ -4,6 +4,7 @@ keys/
 backups/
 scan-sources.json
 skill-tags.json
+skill-order.json
 *.bak
 *.bak-*
 

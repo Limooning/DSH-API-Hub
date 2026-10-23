@@ -58,6 +58,16 @@ out.afterTags = await call("/api/skills");
 out.tagsFileAfterSet = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 out.skillTagsCleared = await post("/api/skills/tags", { id: "demo-skill", tags: [] });
 out.skillTagsUnknown = await post("/api/skills/tags", { id: "nope", tags: ["x"] });
+
+// A second skill, so a saved order has two entries to disagree about.
+const skillDir2 = join(home, ".dsh", "skills", "demo-skill-b");
+mkdirSync(skillDir2, { recursive: true });
+writeFileSync(join(skillDir2, "SKILL.md"), "---\\nname: demo-skill-b\\ndescription: 第二个技能\\n---\\n\\n另一行\\n", "utf8");
+out.skillReorder = await post("/api/skills/reorder", { order: ["demo-skill-b", "demo-skill", "ghost"] });
+out.afterReorder = await call("/api/skills");
+out.orderFile = readFileSync(join(home, ".dsh", "api-hub", "skill-order.json"), "utf8");
+out.skillReorderBadType = await post("/api/skills/reorder", { order: "nope" });
+out.skillReorderEmpty = await post("/api/skills/reorder", { order: [] });
 out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 console.log("PROBE " + JSON.stringify(out));
@@ -147,6 +157,15 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.skillTagsCleared.code, 200);
     assert.deepEqual(JSON.parse(out.tagsFile)["demo-skill"], undefined);
     assert.equal(out.skillTagsUnknown.code, 404);
+
+    // Dragged order is stored beside the tags and wins over the alphabetical
+    // default; ids that no longer exist are dropped instead of being kept.
+    assert.equal(out.skillReorder.code, 200);
+    const reordered = JSON.parse(out.afterReorder.body).skills.map((s) => s.id);
+    assert.deepEqual(reordered.slice(0, 2), ["demo-skill-b", "demo-skill"]);
+    assert.deepEqual(JSON.parse(out.orderFile).order, ["demo-skill-b", "demo-skill"]);
+    assert.equal(out.skillReorderBadType.code, 400);
+    assert.equal(out.skillReorderEmpty.code, 400);
 
     assert.equal(existsSync(join(home, ".dsh", "api-hub", "providers.json")), true);
   } finally {
