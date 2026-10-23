@@ -5,7 +5,7 @@
 // developer's real ~/.dsh/api-hub/providers.json untouched.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, rmSync, statSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -25,6 +25,31 @@ const out = {};
 for (const path of ["/api/health", "/api/state", "/api/skills", "/api/nope"]) out[path] = await call(path);
 console.log("PROBE " + JSON.stringify(out));
 `;
+
+// A directory a child process just released can still be locked for a moment on
+// Windows, and an interrupted run leaves its throwaway home behind. Sweeping at
+// start keeps those from piling up in %TEMP%; anything young enough to belong to
+// a concurrent run is left alone.
+function sweepStaleHomes() {
+  const scratch = fileURLToPath(new URL("./.tmp/", import.meta.url));
+  const cutoff = Date.now() - 120_000;
+  const sweep = (dir, prefix) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir)) {
+      if (prefix && !entry.startsWith(prefix)) continue;
+      const path = join(dir, entry);
+      try {
+        if (statSync(path).mtimeMs > cutoff) continue;
+        rmSync(path, { recursive: true, force: true });
+      } catch { /* still open: the next run picks it up */ }
+    }
+  };
+  sweep(tmpdir(), "api-hub-test-");
+  sweep(tmpdir(), "api-hub-verify-");
+  sweep(tmpdir(), "api-hub-formats-");
+  sweep(scratch, "");
+}
+sweepStaleHomes();
 
 function probeInFreshHome() {
   const home = mkdtempSync(join(tmpdir(), "api-hub-test-"));
