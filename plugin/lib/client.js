@@ -36,19 +36,36 @@ window.__ModuleLoader__.load({
 		if (injected) addCandidate(injected + "/api-hub");
 		addCandidate("/api-hub");
 
+		// Each probe reports why it failed, so the panel can tell a missing route
+		// (404/401 from the host) apart from a blocked cross-origin call.
+		const probeReasons = [];
+
+		function describeFailure(base, outcome) {
+			if (outcome.status) return base + " → HTTP " + outcome.status;
+			return base + " → " + outcome.error;
+		}
+
 		async function probeHealth(base) {
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), 1500);
 			try {
-				const controller = new AbortController();
-				const timer = setTimeout(() => controller.abort(), 1500);
 				const response = await fetch(base + "/api/health", { signal: controller.signal });
 				clearTimeout(timer);
-				return response.ok;
-			} catch {
+				if (response.ok) return true;
+				probeReasons.push(describeFailure(base, { status: response.status }));
+				return false;
+			} catch (error) {
+				clearTimeout(timer);
+				const timedOut = error && error.name === "AbortError";
+				probeReasons.push(describeFailure(base, {
+					error: timedOut ? "超时" : "连接被拒绝或被浏览器拦截（CORS / 私有网络）",
+				}));
 				return false;
 			}
 		}
 
 		async function resolvePanelBase() {
+			probeReasons.length = 0;
 			for (const base of CANDIDATES) {
 				if (await probeHealth(base)) return base;
 			}
@@ -915,7 +932,13 @@ window.__ModuleLoader__.load({
 			}, [notice]);
 
 			if (status === "checking") return h("div", { style: S.hint }, "正在连接面板服务…");
-			if (!base) return h("div", { style: S.hint }, "找不到面板服务（页面协议 " + location.protocol + "）。已尝试：" + CANDIDATES.join("　·　"));
+			if (!base) {
+				return h("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+					h("div", { style: S.hint }, "连不上面板服务（页面协议 " + location.protocol + "）。DSH 的 /api-hub 路由没有响应，通常是插件宿主半侧没加载或版本不匹配。"),
+					h("div", { style: { ...S.hint, fontFamily: MONO, fontSize: "11.5px", lineHeight: 1.7, whiteSpace: "pre-line" } },
+						probeReasons.length ? probeReasons.join("\n") : CANDIDATES.join("\n")),
+					h("div", { style: S.hint }, "排查：确认 profile 的 dsh.profile.bundles 含 dsh-api-hub，且安装的是 v0.3.4 或更新的包。"));
+			}
 
 			return h("div", { style: { position: "relative", minHeight: "420px" } },
 				h(ApiHubPageHeader),
