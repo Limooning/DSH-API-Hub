@@ -5,17 +5,26 @@
 
 ## 未发布
 
+**目标：能接入并真正用得上的接口和技能，都收进来。**
+
 - **能真正调通才允许导入**：检索里每一条候选都会先拿它的 Key 打一次 `/models`（含 `/v1/models`、`/catalog/models` 兜底），2xx 才算通；调不通的行显示红色原因（`Key 被接口拒绝（HTTP 401）`、`Base URL 不对：…`、`连不上`）且「导入」按钮不可点；服务端在写入前会再验一次，绕过界面也写不进去
 - 调通后导入的接口顺带把这次探测到的模型列表写进缓存，卡片一进来就有模型可选
 - 检测失败的行有「重试」；改 Base URL 后 400ms 自动重测
+- **配置文件格式放宽**：除 `.json` 外还认 `.toml` 与 `.env` / `*.env`（以前只在 `.json` 里找 Key）；导入后每次读 Key 都走同一个解析器，TOML / `.env` 里存的 Key 导入后仍然可用
+- **`.toml` / `.env` 只读**：面板不会把 JSON 写回这些文件（会毁掉注释与格式），改 Key 时直接提示「请改原文件」
+- **技能来源放宽**：除 `~/.dsh/skills` 外，也扫其它 agent 的技能目录（`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.cursor/skills`、`~/.continue/skills`），`SKILL.md` 顶部有 `name` / `description` 就有「复制到 DSH」，列表里标出来自哪个 agent
+- **鉴权头按实际结果定**：`Authorization: Bearer` 被 401/403 拒掉时改试 `x-api-key` / `api-key`，能通的把写法记在 provider 的 `auth` 上，之后 `/api/test`、余额、模型、请求接口都照它发；原来只会发 Bearer，碰到这类中转一律被当成 Key 无效
+- **协议不兼容要说清楚**：Anthropic 原生（`/v1/messages`）与 Gemini 原生（`models?key=`）能验证 Key 有效，但会明确告知「面板只调 OpenAI 兼容接口，未导入」，而不是假装导入成功
+- **同一把 Key 只列一行**：Hash 后按值去重，优先保留路径最短的那份（正式配置优先于技能目录或项目里的副本）；已经导入过的 Key 即使又出现在别的文件里也不再重复推荐
+- 模板文件（`.env.example`、`*.sample`、`*.template`、`*.dist`）按占位符处理，不进候选
 - 删掉写死的厂商配置文件名（`jws-image/config.json`、`88api-image-gen-config.json`）：这些文件现在由通用目录扫描按字段自动发现，不再靠名字匹配
 - 检索改为两层来源：**默认目录自动扫描** + **用户手动添加的位置**（`~/.dsh/api-hub/scan-sources.json`）；放在非默认目录的配置文件用「添加扫描位置」填路径与字段路径
-- 目录扫描遍历 `~`、`~/.config`、`~/.dsh`、`%APPDATA%`（macOS 另加 `~/Library/Application Support`），深度 3，识别 `apiKey` / `api_key` / `token` / `authorization` 等字段
-- 字段同级或上层带 URL（`baseUrl` / `endpoint` / `host` 等）时自动作为 Base URL；没有 URL 时按文件路径推断服务商（bailian / deepseek / moonshot / openrouter / groq / gemini / jws / 88api …）
+- 目录扫描遍历 `~`、`~/.config`、`~/.dsh`、`%APPDATA%`（macOS 另加 `~/Library/Application Support`），深度 3，识别 `apiKey` / `api_key` / `*_API_KEY` / `token` / `authorization` 等字段
+- 字段同级或上层带 URL（`baseUrl` / `endpoint` / `host` 等）时自动作为 Base URL；没有 URL 时先按字段名（`DASHSCOPE_API_KEY` → 百炼）再按文件路径推断服务商
 - 检索结果新增「其它配置文件」分组；导入只记录文件路径与字段路径，Key 仍留在原文件
 - 修正：`token` 这类过于宽泛的字段在没有 URL 时不再当成接口候选
-- **只保留 DSH 能用的东西**：不再扫描 Codex 的 `config.toml`（`model_providers`）和 Codex / Claude / agents 的技能目录，`~/.codex` 等目录也被目录扫描跳过
-- 技能只从手动添加的目录导入，且必须是 DSH 格式：`SKILL.md` 顶部 `name` / `description` 缺一不可，导入接口会直接拒绝，列表里按「已跳过 N 个」提示
+- 技能必须是 DSH 格式：`SKILL.md` 顶部 `name` / `description` 缺一不可，导入接口会直接拒绝，列表里按「已跳过 N 个」提示
+- 测试：冒烟用例新增 TOML / `.env` 扫描 → 导入 → 真实调用 → 去重 → 只读拒绝的整条链路
 
 ## 0.5.1
 

@@ -5,7 +5,7 @@
 // developer's real ~/.dsh/api-hub/providers.json untouched.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -166,6 +166,131 @@ test("a live call decides whether a discovered endpoint can be imported", () => 
     assert.equal(added.keySource.type, "json");
     assert.equal(added.keySource.path, join(home, "relay-config.json"));
     assert.equal(reg.providers.some((p) => p.name === "坏 Key"), false, "a dead endpoint is never written");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Other tools write TOML / .env rather than JSON, and some relays want the key in
+// `x-api-key` instead of `Authorization`. Both have to survive the round trip:
+// scan → import → a real call through the panel.
+const FORMATS = `
+import http from "node:http";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+
+const bearerKey = "sk-toml-key-0000000001";
+const xkeyKey = "sk-xkeykey-00000000002";
+
+const bearer = http.createServer((req, res) => {
+  const ok = req.headers.authorization === "Bearer " + bearerKey;
+  res.writeHead(ok ? 200 : 401, { "content-type": "application/json" });
+  res.end(JSON.stringify({ data: ok ? [{ id: "toml-a" }, { id: "toml-b" }] : [] }));
+});
+const xkey = http.createServer((req, res) => {
+  const ok = req.headers["x-api-key"] === xkeyKey;
+  res.writeHead(ok ? 200 : 401, { "content-type": "application/json" });
+  res.end(JSON.stringify({ data: ok ? [{ id: "xkey-a" }] : [] }));
+});
+await new Promise((done) => bearer.listen(0, "127.0.0.1", done));
+await new Promise((done) => xkey.listen(0, "127.0.0.1", done));
+
+const panel = http.createServer(async (req, res) => {
+  try { await handleRequest(req, res, ""); } catch (e) { res.writeHead(500); res.end(String(e)); }
+});
+await new Promise((done) => panel.listen(0, "127.0.0.1", done));
+
+const home = process.env.USERPROFILE || process.env.HOME;
+const mkdir = (rel) => { const dir = join(home, rel); mkdirSync(dir, { recursive: true }); return dir; };
+const write = (rel, body) => { const file = join(home, rel); writeFileSync(file, body, "utf8"); return file; };
+
+mkdir(".config/relay");
+mkdir(".local/share/relay");
+const toml = write(".config/relay/config.toml",
+  "[api]\\nbase_url = \\"http://127.0.0.1:" + bearer.address().port + "/v1\\"  # base url\\napi_key = \\"" + bearerKey + "\\"\\n");
+// The same secret, second copy in a longer path: the scan must collapse it.
+write(".local/share/relay/copy.json", JSON.stringify({ api_key: bearerKey }));
+// A template is not a credential.
+write(".env.example", "OPENAI_API_KEY=sk-example-key-0000000000\\n");
+const envFile = write(".relay-xkey.env", "RELAY_API_KEY=" + xkeyKey + "\\n");
+
+const api = async (path, body) => {
+  const res = await fetch("http://127.0.0.1:" + panel.address().port + path, {
+    method: body ? "POST" : "GET", headers: { "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { code: res.status, body: await res.json() };
+};
+
+const bearerBase = "http://127.0.0.1:" + bearer.address().port + "/v1";
+const xkeyBase = "http://127.0.0.1:" + xkey.address().port + "/v1";
+
+const found = await api("/api/discover");
+const auto = found.body.auto;
+const tomlHit = auto.find((h) => h.path.endsWith("config.toml"));
+const xkeyHit = auto.find((h) => h.path.endsWith(".relay-xkey.env"));
+
+const imported = await api("/api/discover/import", {
+  source: "file", path: toml, jsonPath: tomlHit.jsonPath, baseURL: bearerBase, name: "TOML 中转",
+});
+const importedX = await api("/api/discover/import", {
+  source: "file", path: envFile, jsonPath: xkeyHit.jsonPath, baseURL: xkeyBase, name: "x-api-key 中转",
+});
+const tested = await api("/api/test", { id: importedX.body.provider.id });
+const rewrote = await api("/api/key", { id: imported.body.provider.id, key: "sk-attempt-to-write-000000" });
+const state = await api("/api/state");
+
+bearer.close(); xkey.close(); panel.close();
+console.log("FORMATS " + JSON.stringify({
+  autoPaths: auto.map((h) => h.path),
+  tomlHit: Boolean(tomlHit), xkeyHit: Boolean(xkeyHit),
+  imported, importedX, tested, rewrote,
+  providers: state.body.providers.map((p) => ({ name: p.name, keyPresent: p.keyPresent, cachedCount: p.cachedCount })),
+}));
+`;
+
+function formatsInFreshHome() {
+  // The scanner deliberately skips anything under a `temp` directory, so this
+  // home is built inside the repo instead of os.tmpdir().
+  const scratch = fileURLToPath(new URL("./.tmp/", import.meta.url));
+  mkdirSync(scratch, { recursive: true });
+  const home = mkdtempSync(join(scratch, "formats-"));
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", FORMATS], {
+    env: { ...process.env, USERPROFILE: home, HOME: home },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, "formats probe failed:\n" + result.stderr);
+  const line = result.stdout.split("\n").find((row) => row.startsWith("FORMATS "));
+  assert.ok(line, "formats probe produced no result:\n" + result.stdout);
+  return { home, out: JSON.parse(line.slice("FORMATS ".length)) };
+}
+
+test("TOML and .env sources import, survive a dedupe, and remember the header style", () => {
+  const { home, out } = formatsInFreshHome();
+  try {
+    assert.equal(out.tomlHit, true, "a TOML config is scanned: " + JSON.stringify(out.autoPaths));
+    assert.equal(out.xkeyHit, true, "an .env file is scanned: " + JSON.stringify(out.autoPaths));
+    assert.equal(out.autoPaths.some((p) => p.endsWith(".env.example")), false, "templates are skipped");
+    assert.equal(out.autoPaths.some((p) => p.endsWith("copy.json")), false,
+      "the same secret in a second file is collapsed: " + JSON.stringify(out.autoPaths));
+
+    assert.equal(out.imported.code, 200, JSON.stringify(out.imported.body));
+    assert.equal(out.imported.body.provider.cachedCount, 2);
+    assert.equal(out.importedX.code, 200, JSON.stringify(out.importedX.body));
+
+    // The x-api-key style is remembered on the provider and used by real calls.
+    const reg = JSON.parse(readFileSync(join(home, ".dsh", "api-hub", "providers.json"), "utf8"));
+    const added = reg.providers.find((p) => p.name === "x-api-key 中转");
+    assert.equal(added.auth, "x-api-key");
+    assert.equal(out.tested.body.ok, true, JSON.stringify(out.tested.body));
+
+    // A TOML file is never rewritten: the panel would destroy its comments.
+    assert.equal(out.rewrote.code, 400);
+    assert.match(out.rewrote.body.error, /只读不写/);
+
+    const listed = out.providers.find((p) => p.name === "TOML 中转");
+    assert.equal(listed.keyPresent, true, "the key is still readable after import");
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
