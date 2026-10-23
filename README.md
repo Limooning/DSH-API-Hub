@@ -231,6 +231,10 @@ docs/upstream/              上游需求文档
 - **没有配置 schema**：端口、刷新间隔等目前是代码里的常量，未接入 `cordis.patch.yml` 的 `config`
 - **密钥没有走 `ctx.credentials`**：`dsh-credentials` 类型是直接读写凭据文件，不是通过服务 API
 - **依赖 `webServer` 服务**：拿不到该服务时面板无法工作（不会退化成子进程）
+- **本地回环、无鉴权**：面板只挂在 DSH 的 `127.0.0.1` 上，外部机器连不上；但同一浏览器里的网页可以读取 `/api-hub/api/*` 的响应（CORS 通配）。所以不要为了远程访问把 DSH 绑定到 `0.0.0.0` 后暴露在不可信网络里——那种场景需要额外的 token 校验，目前没有
+- **只在 Windows 上实测过**：代码无平台分支，macOS 未验证
+
+遇到“面板打不开 / 显示找不到面板服务”，见 [故障排查](docs/troubleshooting.md)。
 
 ## License
 
