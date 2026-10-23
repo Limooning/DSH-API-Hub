@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "defaults": {
+    "llm": "deepseek-api",
+    "image": null
+  },
+  "providers": [
+    {
+      "id": "deepseek-api",
+      "name": "DeepSeek 官方",
+      "kind": "llm",
+      "tag": "文本",
+      "enabled": true,
+      "baseURL": "https://api.deepseek.com",
+      "protocol": "OpenAI Responses",
+      "notes": "DeepSeek 官方 API；Key 取自 DSH 凭据库的 refs.DEEPSEEK_API_KEY",
+      "keySource": {
+        "type": "dsh-credentials",
+        "ref": "DEEPSEEK_API_KEY"
+      },
+      "test": { "method": "GET", "path": "/models" },
+      "defaultModel": "deepseek-flash",
+      "balance": {
+        "method": "GET",
+        "path": "/user/balance",
+        "extract": ["balance_infos", 0, "total_balance"],
+        "currency": "CNY",
+        "label": "账户余额"
+      }
+    }
+  ]
+}

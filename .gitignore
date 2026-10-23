@@ -1,0 +1,17 @@
+# Local runtime state — never commit.
+providers.json
+keys/
+backups/
+*.bak
+*.bak-*
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
