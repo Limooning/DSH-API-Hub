@@ -2,6 +2,7 @@
 providers.json
 keys/
 backups/
+scan-sources.json
 *.bak
 *.bak-*
 

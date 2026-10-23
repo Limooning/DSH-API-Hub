@@ -3,6 +3,20 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 未发布
+
+- **能真正调通才允许导入**：检索里每一条候选都会先拿它的 Key 打一次 `/models`（含 `/v1/models`、`/catalog/models` 兜底），2xx 才算通；调不通的行显示红色原因（`Key 被接口拒绝（HTTP 401）`、`Base URL 不对：…`、`连不上`）且「导入」按钮不可点；服务端在写入前会再验一次，绕过界面也写不进去
+- 调通后导入的接口顺带把这次探测到的模型列表写进缓存，卡片一进来就有模型可选
+- 检测失败的行有「重试」；改 Base URL 后 400ms 自动重测
+- 删掉写死的厂商配置文件名（`jws-image/config.json`、`88api-image-gen-config.json`）：这些文件现在由通用目录扫描按字段自动发现，不再靠名字匹配
+- 检索改为两层来源：**默认目录自动扫描** + **用户手动添加的位置**（`~/.dsh/api-hub/scan-sources.json`）；放在非默认目录的配置文件用「添加扫描位置」填路径与字段路径
+- 目录扫描遍历 `~`、`~/.config`、`~/.dsh`、`%APPDATA%`（macOS 另加 `~/Library/Application Support`），深度 3，识别 `apiKey` / `api_key` / `token` / `authorization` 等字段
+- 字段同级或上层带 URL（`baseUrl` / `endpoint` / `host` 等）时自动作为 Base URL；没有 URL 时按文件路径推断服务商（bailian / deepseek / moonshot / openrouter / groq / gemini / jws / 88api …）
+- 检索结果新增「其它配置文件」分组；导入只记录文件路径与字段路径，Key 仍留在原文件
+- 修正：`token` 这类过于宽泛的字段在没有 URL 时不再当成接口候选
+- **只保留 DSH 能用的东西**：不再扫描 Codex 的 `config.toml`（`model_providers`）和 Codex / Claude / agents 的技能目录，`~/.codex` 等目录也被目录扫描跳过
+- 技能只从手动添加的目录导入，且必须是 DSH 格式：`SKILL.md` 顶部 `name` / `description` 缺一不可，导入接口会直接拒绝，列表里按「已跳过 N 个」提示
+
 ## 0.5.1
 
 - 检索对话框改成四组：已管理、未导入的 Key、其它工具的配置文件、Codex `model_providers`
