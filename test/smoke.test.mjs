@@ -355,4 +355,16 @@ test("the model list decides whether an endpoint is a chat or a media API", asyn
   assert.equal(both.counts.image, 1);
   assert.equal(both.counts.video, 1, "sora counts as video, not chat");
   assert.equal(both.counts.embedding, 1);
+  assert.deepEqual(both.types, ["llm", "vision", "image", "video", "embedding"], JSON.stringify(both));
+
+  // A multimodal model is one model with two capabilities: chat *and* vision.
+  const vision = classifyKind(["gpt-4o", "qwen-vl-max", "deepseek-chat"]);
+  assert.equal(vision.kind, "llm");
+  assert.equal(vision.counts.vision, 2, JSON.stringify(vision));
+  assert.equal(vision.label, "文本 · 视觉");
+
+  // Only ticked models count, so an image-only tick on a mixed catalog stays 图片.
+  const onlyImages = classifyKind(["gpt-image-2", "sora-2"]);
+  assert.deepEqual(onlyImages.kinds, ["image"]);
+  assert.equal(onlyImages.label, "图片/视频");
 });
