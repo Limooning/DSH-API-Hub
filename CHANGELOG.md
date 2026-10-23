@@ -5,6 +5,8 @@
 
 ## 0.4.2
 
+已发布到 npm：`dsh-api-hub@0.4.2`。
+
 - 安装方式简化为一条命令：`dsh plugin --profile desktop add dsh-api-hub`（CLI 会自动登记 bundles）
 - 新增 `docs/publish.md`：npm 发布、打 tag、上架插件市场、撤版办法
 ## 0.4.1

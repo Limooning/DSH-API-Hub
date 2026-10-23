@@ -53,6 +53,34 @@ npm login                      # 只需一次
 npm publish                    # package.json 里已有 publishConfig.access = public
 ```
 
+> PowerShell 里如果报「禁止运行脚本」，用 `npm.cmd` 代替 `npm`，或一次性放开：
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+### 发布时会要求浏览器确认（EOTP）
+
+npm 现在要求每次发布在浏览器里授权一次。终端会打印：
+
+```
+npm error code EOTP
+npm error Open this URL in your browser to authenticate:
+npm error   https://www.npmjs.com/auth/cli/<id>
+```
+
+**在能打开浏览器的地方运行发布命令**，点链接 → Authorize，终端会自动继续并打印 `+ dsh-api-hub@<version>`。
+
+如果链接显示成 `***`（非交互终端会遮掉），改用验证码方式：先在账号上启用 2FA，然后
+
+```powershell
+npm publish --otp=123456
+```
+
+**验证发布成功**：
+
+```powershell
+npm view dsh-api-hub version          # 期望是刚发的版本
+dsh plugin --profile test add dsh-api-hub
+```
+
 首次发布后到 <https://www.npmjs.com/package/dsh-api-hub> 确认：
 
 - 版本号正确
