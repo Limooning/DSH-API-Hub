@@ -29,36 +29,39 @@
 
 ## 安装
 
-插件以标准 bundle 形式打包（自带 `cordis.patch.yml`），装进 profile 的 bundles 列表即可：
+一条命令即可：`dsh plugin` 会把包装进 profile，并**自动把包名登记到 `dsh.profile.bundles`**。
 
 ```powershell
-# 1) 把包链进 profile（<仓库路径> 换成你的实际路径）
-cd ~/.dsh/profiles/desktop
-pnpm add link:<仓库路径>
+# 从 npm（发布后）
+dsh plugin --profile desktop add dsh-api-hub
 
-# 2) 在 profile 的 package.json 里把包名加进 bundles
-#    "dsh": { "profile": { "bundles": [ ..., "dsh-api-hub" ] } }
+# 从本地 tarball（Release 附件）
+dsh plugin --profile desktop add C:\path\dsh-api-hub-0.4.2.tgz
 
-# 3) 重启 DSH 客户端
+# 从源码（开发态，改动即时生效）
+dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub
 ```
 
-Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...` / `/Users/...`）。代码里没有平台分支，路径都用 `node:path` 拼接，读写位置跟随 `os.homedir()`。
+`--profile` 换成你要装的 profile（`desktop` 是桌面端默认的）。装完**重启 DSH**，左侧边栏「插件」下方会出现 **API Hub**。
 
-重启后，左侧边栏「插件」下方会出现 **API Hub**，点开就是面板。
+Windows 与 macOS 命令一致，只有路径写法不同。代码里没有平台分支，路径都用 `node:path` 拼接，读写位置跟随 `os.homedir()`。
 
-**卸载**：从 bundles 里删掉 `dsh-api-hub`，`pnpm remove dsh-api-hub`，重启。
+**卸载**：
+
+```powershell
+dsh plugin --profile desktop remove dsh-api-hub
+# 再从 profile 的 dsh.profile.bundles 里删掉 "dsh-api-hub"，重启
+```
 
 > 本插件不依赖设置页，profile 里 `ui-settings` 开着或关着都不影响它。
 
-### 从打包好的 tarball 安装
-
-不想 clone 仓库也可以直接装包（仓库根目录就是包本身：后端、示例注册表、图标都在里面）：
+### 手动安装（不用 CLI）
 
 ```powershell
-cd <仓库>
-pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.4.1.tgz
 cd ~/.dsh/profiles/desktop
-pnpm add <上面 tgz 的绝对路径>
+pnpm add link:<仓库路径>        # 或 pnpm add <tgz 路径>
+# 再把 "dsh-api-hub" 加进该 profile package.json 的 dsh.profile.bundles
+# 重启 DSH
 ```
 
 首次运行时，后端会在 `~/.dsh/api-hub/` 下自动创建 `providers.json`（从包内的 `providers.example.json` 复制），之后面板的改动都写在这个文件里。
@@ -148,7 +151,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.4.1**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.4.2**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新
@@ -217,6 +220,7 @@ dsh --profile lab --port 17899 --no-open
 - [故障排查](docs/troubleshooting.md) — 面板连不上、侧边栏没入口、安装报错
 - [变更记录](CHANGELOG.md)
 - [安全说明](SECURITY.md) — 回环/鉴权的取舍，如何私下报告问题
+- [发布指引](docs/publish.md) — npm 发布、上架插件市场（维护者用）
 - [上游需求](docs/upstream/settings-section-icon.md) — 让设置分区支持自定义图标
 
 ## 目录结构
