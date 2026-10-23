@@ -205,15 +205,17 @@ const home = process.env.USERPROFILE || process.env.HOME;
 const mkdir = (rel) => { const dir = join(home, rel); mkdirSync(dir, { recursive: true }); return dir; };
 const write = (rel, body) => { const file = join(home, rel); writeFileSync(file, body, "utf8"); return file; };
 
-mkdir(".config/relay");
-mkdir(".local/share/relay");
-const toml = write(".config/relay/config.toml",
+// The automatic pass only looks inside DSH's own data dir, so the fixtures live
+// under ~/.dsh — that is the folder a user cannot be expected to comb by hand.
+mkdir(".dsh/relay");
+mkdir(".dsh/relay/extra");
+const toml = write(".dsh/relay/config.toml",
   "[api]\\nbase_url = \\"http://127.0.0.1:" + bearer.address().port + "/v1\\"  # base url\\napi_key = \\"" + bearerKey + "\\"\\n");
 // The same secret, second copy in a longer path: the scan must collapse it.
-write(".local/share/relay/copy.json", JSON.stringify({ api_key: bearerKey }));
+write(".dsh/relay/extra/copy.json", JSON.stringify({ api_key: bearerKey }));
 // A template is not a credential.
-write(".env.example", "OPENAI_API_KEY=sk-example-key-0000000000\\n");
-const envFile = write(".relay-xkey.env", "RELAY_API_KEY=" + xkeyKey + "\\n");
+write(".dsh/.env.example", "OPENAI_API_KEY=sk-example-key-0000000000\\n");
+const envFile = write(".dsh/relay/.relay-xkey.env", "RELAY_API_KEY=" + xkeyKey + "\\n");
 
 const api = async (path, body) => {
   const res = await fetch("http://127.0.0.1:" + panel.address().port + path, {

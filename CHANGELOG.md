@@ -12,14 +12,15 @@
 - 检测失败的行有「重试」；改 Base URL 后 400ms 自动重测
 - **配置文件格式放宽**：除 `.json` 外还认 `.toml` 与 `.env` / `*.env`（以前只在 `.json` 里找 Key）；导入后每次读 Key 都走同一个解析器，TOML / `.env` 里存的 Key 导入后仍然可用
 - **`.toml` / `.env` 只读**：面板不会把 JSON 写回这些文件（会毁掉注释与格式），改 Key 时直接提示「请改原文件」
-- **技能来源放宽**：除 `~/.dsh/skills` 外，也扫其它 agent 的技能目录（`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.cursor/skills`、`~/.continue/skills`、`~/.cc-switch/skills`），`SKILL.md` 顶部有 `name` / `description` 就有「复制到 DSH」，列表里标出来自哪个 agent；`.system` / `.disabled` 这类隐藏目录跳过
+- **技能来源**：默认只看 DSH 自己的 `~/.dsh/skills`（本就是面板在管的目录）；别的 agent 的技能目录改为手动添加一次（`~/.codex/skills`、`~/.claude/skills`、`~/.cc-switch/skills` 等），`SKILL.md` 顶部有 `name` / `description` 就能「复制到 DSH」，列表里标出来自哪个目录；`.system` / `.disabled` 这类隐藏目录跳过
 - **鉴权头按实际结果定**：`Authorization: Bearer` 被 401/403 拒掉时改试 `x-api-key` / `api-key`，能通的把写法记在 provider 的 `auth` 上，之后 `/api/test`、余额、模型、请求接口都照它发；原来只会发 Bearer，碰到这类中转一律被当成 Key 无效
 - **协议不兼容要说清楚**：Anthropic 原生（`/v1/messages`）与 Gemini 原生（`models?key=`）能验证 Key 有效，但会明确告知「面板只调 OpenAI 兼容接口，未导入」，而不是假装导入成功
 - **同一把 Key 只列一行**：Hash 后按值去重，优先保留路径最短的那份（正式配置优先于技能目录或项目里的副本）；已经导入过的 Key 即使又出现在别的文件里也不再重复推荐
 - 模板文件（`.env.example`、`*.sample`、`*.template`、`*.dist`）按占位符处理，不进候选
 - 删掉写死的厂商配置文件名（`jws-image/config.json`、`88api-image-gen-config.json`）：这些文件现在由通用目录扫描按字段自动发现，不再靠名字匹配
-- 检索改为两层来源：**默认目录自动扫描** + **用户手动添加的位置**（`~/.dsh/api-hub/scan-sources.json`）；放在非默认目录的配置文件用「添加扫描位置」填路径与字段路径
-- 目录扫描遍历 `~`、`~/.config`、`~/.dsh`、`%APPDATA%`（macOS 另加 `~/Library/Application Support`），深度 3，识别 `apiKey` / `api_key` / `*_API_KEY` / `token` / `authorization` 等字段
+- 检索改为两层来源：**默认只扫 DSH 自己的目录**（`~/.dsh`：凭据库、技能目录、DSH 自己写的配置）+ **用户手动添加的位置**（`~/.dsh/api-hub/scan-sources.json`）；放在别处的配置文件与技能目录用「添加扫描位置」填路径
+- 目录扫描遍历 `~/.dsh`，深度 4，识别 `apiKey` / `api_key` / `*_API_KEY` / `token` / `authorization` 等字段；`node_modules`、缓存、会话记录、本面板自己的 `keys/` 跳过
+- 检索对话框里的「扫描范围」默认折叠成一行（`自动 ~/.dsh · 手动 N 处`），点「展开」才显示扫描说明、已添加的位置和添加表单
 - 字段同级或上层带 URL（`baseUrl` / `endpoint` / `host` 等）时自动作为 Base URL；没有 URL 时先按字段名（`DASHSCOPE_API_KEY` → 百炼）再按文件路径推断服务商
 - 检索结果新增「其它配置文件」分组；导入只记录文件路径与字段路径，Key 仍留在原文件
 - 修正：`token` 这类过于宽泛的字段在没有 URL 时不再当成接口候选
