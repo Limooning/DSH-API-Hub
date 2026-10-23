@@ -129,14 +129,16 @@ DSH 进程
 │
 └─ plugin/lib/server.mjs 的 handleRequest()   进程内，无子进程
 
-浏览器页面
+渲染进程（Electron 里跑 React 的那一层，等同于 DSH 自己的界面）
 └─ plugin/lib/client.js         客户端半侧
     ├─ sidebar.panellist → 侧边栏那一行 + 枢纽图标
     ├─ main              → 点开后的整页
-    └─ 后端地址：注入的 origin → 页面 origin → 相对路径，取第一个可用的
+    └─ 后端地址：同源（http 页面）→ 注入的 origin → 相对路径，取第一个可用的
 ```
 
 界面与宿主之间只通过 `/api-hub/api/*` 这层内部 HTTP 传数据（`state`、`test`、`key`、`models`、`balance`、`enabled`、`default`、`request`、`skills` 等）。这层路由由 DSH 自己的服务提供，不监听任何额外端口。
+
+> `plugin/package.json` 里的 `dsh.client.platform: "web"` 是 **DSH 对客户端插件的称呼**，指“跑在渲染进程/Web 运行时里”，不是“这是一个网页”。dshmarket 也是同一个值。插件没有 iframe、没有独立页面、不加载任何 URL。
 
 ### 为什么入口在侧边栏，而不是设置页
 
