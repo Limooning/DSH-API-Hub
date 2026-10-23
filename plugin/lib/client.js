@@ -12,17 +12,29 @@ window.__ModuleLoader__.load({
 		const inject = ["slots"];
 
 		// ---------------------------------------------------------------- base
-		// Where the panel service lives, in preference order: the origin the host
-		// injected (Electron loads the client from a non-http origin), the page
-		// origin for http(s) pages, then a relative path.
-		const injected = typeof window !== "undefined" && window.__API_HUB_ORIGIN__
+		// Where the panel service lives. Two situations:
+		//   - Electron shell: the page origin is not http(s), so the host injects
+		//     the server origin and every call is cross-origin to loopback.
+		//   - Browser (web mode, including remote access): same-origin is both
+		//     reachable and CORS-free, while an injected 127.0.0.1 would point at
+		//     the viewer's own machine. Same-origin therefore wins there.
+		const rawInjected = typeof window !== "undefined" && window.__API_HUB_ORIGIN__
 			? String(window.__API_HUB_ORIGIN__).replace(/\/+$/, "")
 			: "";
+		// getOrigin() can report a wildcard bind address; 0.0.0.0 and [::] are not
+		// dialable from a page, so map them onto loopback.
+		const normalizeOrigin = (value) => value
+			.replace(/^(https?:\/\/)0\.0\.0\.0(?=[:/]|$)/i, "$1127.0.0.1")
+			.replace(/^(https?:\/\/)\[::\](?=[:/]|$)/i, "$1[::1]");
+		const injected = rawInjected ? normalizeOrigin(rawInjected) : "";
 		const httpOrigin = location.protocol === "http:" || location.protocol === "https:";
 		const CANDIDATES = [];
-		if (injected) CANDIDATES.push(injected + "/api-hub");
-		if (httpOrigin) CANDIDATES.push(location.origin + "/api-hub");
-		CANDIDATES.push("/api-hub");
+		const addCandidate = (value) => {
+			if (value && !CANDIDATES.includes(value)) CANDIDATES.push(value);
+		};
+		if (httpOrigin) addCandidate(location.origin + "/api-hub");
+		if (injected) addCandidate(injected + "/api-hub");
+		addCandidate("/api-hub");
 
 		async function probeHealth(base) {
 			try {
@@ -903,7 +915,7 @@ window.__ModuleLoader__.load({
 			}, [notice]);
 
 			if (status === "checking") return h("div", { style: S.hint }, "正在连接面板服务…");
-			if (!base) return h("div", { style: S.hint }, "找不到面板服务。已尝试：" + CANDIDATES.join("　·　"));
+			if (!base) return h("div", { style: S.hint }, "找不到面板服务（页面协议 " + location.protocol + "）。已尝试：" + CANDIDATES.join("　·　"));
 
 			return h("div", { style: { position: "relative", minHeight: "420px" } },
 				h(ApiHubPageHeader),
@@ -959,6 +971,8 @@ window.__ModuleLoader__.load({
 		}
 
 		exports.apply = apply;
+		// Test hook: the candidate list depends on the page environment.
+		exports.__baseCandidates = () => CANDIDATES.slice();
 		exports.inject = inject;
 		// Test hooks: render checks mount these directly with fake data.
 		exports.__components = { ApiHubPanel, ProviderCard, SkillRow, Switch, Dialog, ModelDialog, KeyDialog, AddProviderDialog, RequestDialog, SkillViewDialog, ConfirmDialog, ApiHubSettingsPage, HubIcon, ApiHubPageHeader };

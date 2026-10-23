@@ -297,6 +297,9 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  // Chromium asks before a page may reach a private-network address; the
+  // Electron shell loads from a non-http origin, so every call is cross-origin.
+  'Access-Control-Allow-Private-Network': 'true',
 };
 
 const json = (res, code, obj) => {
