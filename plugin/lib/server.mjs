@@ -6,7 +6,12 @@ import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REGISTRY_PATH = join(HERE, 'providers.json');
+// User data lives in ~/.dsh/api-hub, not inside the installed package, so a
+// linked working copy and a package installed from a tarball read the same files.
+const DATA_DIR = join(homedir(), '.dsh', 'api-hub');
+const REGISTRY_PATH = join(DATA_DIR, 'providers.json');
+// Shipped with the package (lib/ -> package root) and copied on first run.
+const EXAMPLE_PATH = join(HERE, '..', 'providers.example.json');
 const DSH_CREDENTIALS = join(homedir(), '.dsh', '.credentials.yaml');
 const SKILLS_DIR = join(homedir(), '.dsh', 'skills');
 const SKILLS_OFF = join(SKILLS_DIR, '.disabled');
@@ -14,7 +19,22 @@ const SKILLS_OFF = join(SKILLS_DIR, '.disabled');
 const expandHome = (p) => (p.startsWith('~') ? join(homedir(), p.slice(1)) : p);
 const mask = (key) => (!key ? '' : key.length <= 8 ? '****' : key.slice(0, 5) + '…' + key.slice(-4));
 
-const loadRegistry = () => JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
+/** Seed providers.json from the bundled example the first time the hub runs. */
+function ensureRegistry() {
+  if (existsSync(REGISTRY_PATH)) return;
+  mkdirSync(DATA_DIR, { recursive: true });
+  if (existsSync(EXAMPLE_PATH)) {
+    writeFileSync(REGISTRY_PATH, readFileSync(EXAMPLE_PATH, 'utf8'), 'utf8');
+    return;
+  }
+  const empty = { version: 1, defaults: { llm: null, image: null }, providers: [] };
+  writeFileSync(REGISTRY_PATH, JSON.stringify(empty, null, 2) + '\n', 'utf8');
+}
+
+const loadRegistry = () => {
+  ensureRegistry();
+  return JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
+};
 const saveRegistry = (reg) => writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2) + '\n', 'utf8');
 
 // ---------- credential readers / writers ----------

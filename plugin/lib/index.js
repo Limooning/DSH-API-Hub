@@ -1,13 +1,12 @@
 // Host half of dsh-api-hub.
 //
 // The panel is a browser plugin; its data comes from this host half, which
-// mounts the request handler from ../../server.mjs on DSH's own web server at
+// mounts the request handler from ./server.mjs on DSH's own web server at
 // /api-hub. Nothing listens on a port of its own and no child process runs.
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { statSync } from 'node:fs';
 
-// lib/ lives inside <api-hub>/plugin, so the panel backend sits two levels up.
-const SERVER_SCRIPT = fileURLToPath(new URL('../../server.mjs', import.meta.url));
+const SERVER_SCRIPT = fileURLToPath(new URL('./server.mjs', import.meta.url));
 
 const ROUTE_PREFIX = '/api-hub';
 

@@ -50,11 +50,24 @@ Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...\plugin` /
 
 > 本插件不依赖设置页，profile 里 `ui-settings` 开着或关着都不影响它。
 
+### 从打包好的 tarball 安装
+
+不想 clone 仓库也可以直接装包（`plugin/` 是自包含的：后端、示例注册表、图标都在里面）：
+
+```powershell
+cd <仓库>/plugin
+pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.3.0.tgz
+cd ~/.dsh/profiles/desktop
+pnpm add <上面 tgz 的绝对路径>
+```
+
+首次运行时，后端会在 `~/.dsh/api-hub/` 下自动创建 `providers.json`（从包内的 `providers.example.json` 复制），之后面板的改动都写在这个文件里。
+
 ## 配置
 
 ### providers.json
 
-面板的注册表，默认在 `~/.dsh/api-hub/providers.json`（**不进版本库**）。仓库里的 `providers.example.json` 只有一个 DeepSeek 官方文本服务商，可以照它改：
+面板的注册表，默认在 `~/.dsh/api-hub/providers.json`（**不进版本库**）。首次运行时若文件不存在，会自动从包内的 `plugin/providers.example.json` 复制一份；它只有一个 DeepSeek 官方文本服务商，可以照它改：
 
 ```jsonc
 {
@@ -110,11 +123,11 @@ Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...\plugin` /
 ```
 DSH 进程
 ├─ plugin/lib/index.js          宿主半侧
-│   ├─ 懒加载 ../../server.mjs 的 handleRequest（文件变更自动重载）
+│   ├─ 懒加载 lib/server.mjs 的 handleRequest（文件变更自动重载）
 │   ├─ ctx.inject(['webServer']) → register({ kind: 'prefix', path: '/api-hub' })
 │   └─ webserver/index-inject   → 注入 window.__API_HUB_ORIGIN__
 │
-└─ server.mjs 的 handleRequest()   进程内，无子进程
+└─ plugin/lib/server.mjs 的 handleRequest()   进程内，无子进程
 
 浏览器页面
 └─ plugin/lib/client.js         客户端半侧
@@ -133,7 +146,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.2.0**。每个版本都打 tag，`git tag -n` 可以看到全部。
+当前版本：**v0.3.0**。每个版本都打 tag，`git tag -n` 可以看到全部。
 
 ```powershell
 # 更新到最新
@@ -173,14 +186,14 @@ git push origin v0.2.1
 
 | 改什么 | 生效方式 |
 |---|---|
-| `server.mjs`（后端） | 宿主按 mtime 自动重新 import，**刷新页面即生效** |
+| `plugin/lib/server.mjs`（后端） | 宿主按 mtime 自动重新 import，**刷新页面即生效** |
 | `plugin/lib/client.js`（界面） | 保存后刷新页面；若没变化，重启 DSH（客户端模块图在启动时确定） |
 | `plugin/lib/index.js`（宿主半侧） | 需要重启 DSH |
 
 改完先做语法检查：
 
 ```powershell
-node --check server.mjs
+node --check plugin/lib/server.mjs
 node --check plugin/lib/index.js
 node --check plugin/lib/client.js
 ```
@@ -195,13 +208,13 @@ dsh --profile lab --port 17899 --no-open
 ## 目录结构
 
 ```
-server.mjs                  后端：providers / 余额 / 模型 / 技能，全部逻辑
-providers.example.json      注册表示例（只含 DeepSeek 官方）
-plugin/
+plugin/                      整个包，可独立打包安装
   package.json              插件清单：dsh.bundle.patch + dsh.client
   cordis.patch.yml          自带 patch 层，插入 api-hub-plugin 条目
   lib/index.js              宿主半侧：挂路由、注入 origin
   lib/client.js             客户端半侧：侧边栏入口 + 原生面板
+  lib/server.mjs            后端：providers / 余额 / 模型 / 技能，全部逻辑
+  providers.example.json    注册表示例（只含 DeepSeek 官方），首次运行自动复制
   assets/icon.svg           枢纽标记（纯色，跟随主题）
 docs/upstream/              上游需求文档
 ```
