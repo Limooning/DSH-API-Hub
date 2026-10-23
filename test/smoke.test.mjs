@@ -347,4 +347,12 @@ test("the model list decides whether an endpoint is a chat or a media API", asyn
   const unknown = classifyKind([]);
   assert.equal(unknown.kind, "llm");
   assert.equal(unknown.known, false);
+
+  // An endpoint that sells both is both kinds, and each is labelled by its name.
+  const both = classifyKind(["deepseek-chat", "gpt-4o", "gpt-image-2", "sora-2", "text-embedding-3-small"]);
+  assert.deepEqual(both.kinds, ["llm", "image"], JSON.stringify(both));
+  assert.equal(both.counts.llm, 2);
+  assert.equal(both.counts.image, 1);
+  assert.equal(both.counts.video, 1, "sora counts as video, not chat");
+  assert.equal(both.counts.embedding, 1);
 });
