@@ -56,7 +56,7 @@ Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...` / `/User
 
 ```powershell
 cd <仓库>
-pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.4.0.tgz
+pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.4.1.tgz
 cd ~/.dsh/profiles/desktop
 pnpm add <上面 tgz 的绝对路径>
 ```
@@ -148,7 +148,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.4.0**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.4.1**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新
@@ -192,13 +192,18 @@ git push origin v0.2.1
 | `lib/client.js`（界面） | 保存后刷新页面；若没变化，重启 DSH（客户端模块图在启动时确定） |
 | `lib/index.js`（宿主半侧） | 需要重启 DSH |
 
-改完先做语法检查：
+改完先做语法检查，再跑冒烟测试：
 
 ```powershell
 node --check lib/server.mjs
 node --check lib/index.js
 node --check lib/client.js
+npm test          # 用临时 HOME 跑后端：播种、健康检查、404、技能空目录
 ```
+
+测试不会碰你的 `~/.dsh/api-hub/providers.json`——每个用例在子进程里用一次性 HOME 运行。
+
+CI 在 Windows / macOS / Linux × Node 20/22 上跑同一套检查（`.github/workflows/ci.yml`）。
 
 想在不碰日常环境的前提下试插件，可以复制一个 profile 出来单独跑：
 
@@ -206,6 +211,13 @@ node --check lib/client.js
 # 复制 desktop profile 为 lab，装好插件后：
 dsh --profile lab --port 17899 --no-open
 ```
+
+## 相关文档
+
+- [故障排查](docs/troubleshooting.md) — 面板连不上、侧边栏没入口、安装报错
+- [变更记录](CHANGELOG.md)
+- [安全说明](SECURITY.md) — 回环/鉴权的取舍，如何私下报告问题
+- [上游需求](docs/upstream/settings-section-icon.md) — 让设置分区支持自定义图标
 
 ## 目录结构
 

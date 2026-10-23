@@ -1,0 +1,70 @@
+name: Bug report
+description: 面板打不开、功能异常等
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看 [故障排查](../../docs/troubleshooting.md)，常见问题（面板连不上、侧边栏没入口、安装报错）那里都有对照表。
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 仓库里 `git describe --tags`，或 `~/.dsh/profiles/<profile>/node_modules/dsh-api-hub/package.json` 的 version
+      placeholder: v0.4.1
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本
+      placeholder: 0.2.1-rc.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: 安装方式
+      options:
+        - link（仓库目录）
+        - tarball（Release 附件）
+        - npm
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 面板上显示什么？如果是“连不上面板服务”，请把列出的每个地址和原因一起贴上
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 重启 DSH
+        2. 点侧边栏 API Hub
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 附加信息
+      description: DSH 控制台里以 `[api-hub]` 开头的行
+      render: text
