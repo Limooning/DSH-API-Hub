@@ -21,8 +21,21 @@ const call = async (path) => {
   await handleRequest(req, res, "");
   return { code: res.code, body: res.body };
 };
+const post = async (path, body) => {
+  const payload = JSON.stringify(body);
+  const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
+  const req = {
+    method: "POST", url: path, headers: {},
+    on(event, cb) { if (event === "data") cb(payload); else if (event === "end") cb(); return this; },
+  };
+  await handleRequest(req, res, "");
+  return { code: res.code, body: res.body };
+};
 const out = {};
 for (const path of ["/api/health", "/api/state", "/api/skills", "/api/nope"]) out[path] = await call(path);
+out.rename = await post("/api/panel/title", { title: "  接口\\n台  " });
+out.renameEmpty = await post("/api/panel/title", { title: "   " });
+out.afterRename = await call("/api/state");
 console.log("PROBE " + JSON.stringify(out));
 `;
 
@@ -79,6 +92,12 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     // No ~/.dsh/skills on a fresh machine must stay a 200 with an empty list.
     assert.equal(out["/api/skills"].code, 200);
     assert.deepEqual(JSON.parse(out["/api/skills"].body).skills, []);
+
+    // Double-clicking the title writes here; whitespace-only names are refused.
+    assert.equal(out.rename.code, 200);
+    assert.equal(JSON.parse(out.rename.body).title, "接口 台");
+    assert.equal(out.renameEmpty.code, 400);
+    assert.equal(JSON.parse(out.afterRename.body).title, "接口 台");
 
     assert.equal(existsSync(join(home, ".dsh", "api-hub", "providers.json")), true);
   } finally {
