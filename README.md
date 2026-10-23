@@ -220,7 +220,8 @@ dsh --profile lab --port 17899 --no-open
 - [故障排查](docs/troubleshooting.md) — 面板连不上、侧边栏没入口、安装报错
 - [变更记录](CHANGELOG.md)
 - [安全说明](SECURITY.md) — 回环/鉴权的取舍，如何私下报告问题
-- [发布指引](docs/publish.md) — npm 发布、上架插件市场（维护者用）
+- [发布指引](docs/publish.md) — npm 发布与版本流程（维护者用）
+- [上架材料](docs/market-entry.md) — 插件市场 PR 的条目内容与要求
 - [上游需求](docs/upstream/settings-section-icon.md) — 让设置分区支持自定义图标
 
 ## 目录结构
