@@ -1,4 +1,4 @@
-<img src="plugin/assets/icon.svg" width="64" height="64" alt="API Hub icon">
+<img src="assets/icon.svg" width="64" height="64" alt="API Hub icon">
 
 # API Hub
 
@@ -34,7 +34,7 @@
 ```powershell
 # 1) 把包链进 profile（<仓库路径> 换成你的实际路径）
 cd ~/.dsh/profiles/desktop
-pnpm add link:<仓库路径>/plugin
+pnpm add link:<仓库路径>
 
 # 2) 在 profile 的 package.json 里把包名加进 bundles
 #    "dsh": { "profile": { "bundles": [ ..., "dsh-api-hub" ] } }
@@ -42,7 +42,7 @@ pnpm add link:<仓库路径>/plugin
 # 3) 重启 DSH 客户端
 ```
 
-Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...\plugin` / `/Users/.../plugin`）。代码里没有平台分支，路径都用 `node:path` 拼接，读写位置跟随 `os.homedir()`。
+Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...` / `/Users/...`）。代码里没有平台分支，路径都用 `node:path` 拼接，读写位置跟随 `os.homedir()`。
 
 重启后，左侧边栏「插件」下方会出现 **API Hub**，点开就是面板。
 
@@ -52,11 +52,11 @@ Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...\plugin` /
 
 ### 从打包好的 tarball 安装
 
-不想 clone 仓库也可以直接装包（`plugin/` 是自包含的：后端、示例注册表、图标都在里面）：
+不想 clone 仓库也可以直接装包（仓库根目录就是包本身：后端、示例注册表、图标都在里面）：
 
 ```powershell
-cd <仓库>/plugin
-pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.3.4.tgz
+cd <仓库>
+pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.4.0.tgz
 cd ~/.dsh/profiles/desktop
 pnpm add <上面 tgz 的绝对路径>
 ```
@@ -67,7 +67,7 @@ pnpm add <上面 tgz 的绝对路径>
 
 ### providers.json
 
-面板的注册表，默认在 `~/.dsh/api-hub/providers.json`（**不进版本库**）。首次运行时若文件不存在，会自动从包内的 `plugin/providers.example.json` 复制一份；它只有一个 DeepSeek 官方文本服务商，可以照它改：
+面板的注册表，默认在 `~/.dsh/api-hub/providers.json`（**不进版本库**）。首次运行时若文件不存在，会自动从包内的 `providers.example.json` 复制一份；它只有一个 DeepSeek 官方文本服务商，可以照它改：
 
 ```jsonc
 {
@@ -122,15 +122,15 @@ pnpm add <上面 tgz 的绝对路径>
 
 ```
 DSH 进程
-├─ plugin/lib/index.js          宿主半侧
+├─ lib/index.js                 宿主半侧
 │   ├─ 懒加载 lib/server.mjs 的 handleRequest（文件变更自动重载）
 │   ├─ ctx.inject(['webServer']) → register({ kind: 'prefix', path: '/api-hub' })
 │   └─ webserver/index-inject   → 注入 window.__API_HUB_ORIGIN__
 │
-└─ plugin/lib/server.mjs 的 handleRequest()   进程内，无子进程
+└─ lib/server.mjs 的 handleRequest()   进程内，无子进程
 
 渲染进程（Electron 里跑 React 的那一层，等同于 DSH 自己的界面）
-└─ plugin/lib/client.js         客户端半侧
+└─ lib/client.js                客户端半侧
     ├─ sidebar.panellist → 侧边栏那一行 + 枢纽图标
     ├─ main              → 点开后的整页
     └─ 后端地址：同源（http 页面）→ 注入的 origin → 相对路径，取第一个可用的
@@ -138,7 +138,7 @@ DSH 进程
 
 界面与宿主之间只通过 `/api-hub/api/*` 这层内部 HTTP 传数据（`state`、`test`、`key`、`models`、`balance`、`enabled`、`default`、`request`、`skills` 等）。这层路由由 DSH 自己的服务提供，不监听任何额外端口。
 
-> `plugin/package.json` 里的 `dsh.client.platform: "web"` 是 **DSH 对客户端插件的称呼**，指“跑在渲染进程/Web 运行时里”，不是“这是一个网页”。dshmarket 也是同一个值。插件没有 iframe、没有独立页面、不加载任何 URL。
+> `package.json` 里的 `dsh.client.platform: "web"` 是 **DSH 对客户端插件的称呼**，指“跑在渲染进程/Web 运行时里”，不是“这是一个网页”。dshmarket 也是同一个值。插件没有 iframe、没有独立页面、不加载任何 URL。
 
 ### 为什么入口在侧边栏，而不是设置页
 
@@ -148,7 +148,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.3.4**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.4.0**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新
@@ -174,7 +174,7 @@ git worktree remove ../api-hub-v0.2.0    # 用完清理
 # 1) 改代码、正常提交
 git commit -am "feat: ..."
 
-# 2) 改 plugin/package.json 的 version，然后打 tag
+# 2) 改 package.json 的 version，然后打 tag
 git tag -a v0.2.1 -m "v0.2.1 — 变更说明"
 
 # 3) 推送提交和 tag
@@ -188,16 +188,16 @@ git push origin v0.2.1
 
 | 改什么 | 生效方式 |
 |---|---|
-| `plugin/lib/server.mjs`（后端） | 宿主按 mtime 自动重新 import，**刷新页面即生效** |
-| `plugin/lib/client.js`（界面） | 保存后刷新页面；若没变化，重启 DSH（客户端模块图在启动时确定） |
-| `plugin/lib/index.js`（宿主半侧） | 需要重启 DSH |
+| `lib/server.mjs`（后端） | 宿主按 mtime 自动重新 import，**刷新页面即生效** |
+| `lib/client.js`（界面） | 保存后刷新页面；若没变化，重启 DSH（客户端模块图在启动时确定） |
+| `lib/index.js`（宿主半侧） | 需要重启 DSH |
 
 改完先做语法检查：
 
 ```powershell
-node --check plugin/lib/server.mjs
-node --check plugin/lib/index.js
-node --check plugin/lib/client.js
+node --check lib/server.mjs
+node --check lib/index.js
+node --check lib/client.js
 ```
 
 想在不碰日常环境的前提下试插件，可以复制一个 profile 出来单独跑：
@@ -209,17 +209,21 @@ dsh --profile lab --port 17899 --no-open
 
 ## 目录结构
 
+仓库根目录就是 npm 包，`pnpm add link:<仓库路径>` 直接可用：
+
 ```
-plugin/                      整个包，可独立打包安装
-  package.json              插件清单：dsh.bundle.patch + dsh.client
-  cordis.patch.yml          自带 patch 层，插入 api-hub-plugin 条目
-  lib/index.js              宿主半侧：挂路由、注入 origin
-  lib/client.js             客户端半侧：侧边栏入口 + 原生面板
-  lib/server.mjs            后端：providers / 余额 / 模型 / 技能，全部逻辑
-  providers.example.json    注册表示例（只含 DeepSeek 官方），首次运行自动复制
-  assets/icon.svg           枢纽标记（纯色，跟随主题）
+package.json                插件清单：dsh.bundle.patch + dsh.client
+cordis.patch.yml            自带 patch 层，插入 api-hub-plugin 条目
+lib/index.js                宿主半侧：挂路由、注入 origin
+lib/client.js               客户端半侧：侧边栏入口 + 原生面板
+lib/server.mjs              后端：providers / 余额 / 模型 / 技能，全部逻辑
+providers.example.json      注册表示例（只含 DeepSeek 官方），首次运行自动复制
+assets/icon.svg             枢纽标记（纯色，跟随主题）
 docs/upstream/              上游需求文档
+.github/workflows/          打 tag 时自动打包并发布 Release
 ```
+
+运行时数据不在仓库里：`providers.json`、`keys/` 都被 `.gitignore` 挡住。
 
 ## 已知限制
 

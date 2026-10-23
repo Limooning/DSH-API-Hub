@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to publish (e.g. v0.3.0)"
+        description: "Existing tag to publish (e.g. v0.4.0)"
         required: true
         type: string
 
@@ -30,16 +30,15 @@ jobs:
 
       - name: Check syntax
         run: |
-          node --check plugin/lib/server.mjs
-          node --check plugin/lib/index.js
-          node --check plugin/lib/client.js
+          node --check lib/server.mjs
+          node --check lib/index.js
+          node --check lib/client.js
 
       - name: Pack the plugin
         run: |
           mkdir -p dist
-          cd plugin
-          npm pack --pack-destination ../dist
-          ls -l ../dist
+          npm pack --pack-destination dist
+          ls -l dist
 
       - name: Publish the release
         env:
@@ -49,5 +48,5 @@ jobs:
           gh release create "$TAG" dist/*.tgz \
             --title "$TAG" \
             --generate-notes \
-            --notes "Install: \`pnpm add <the .tgz asset>\` from this release, or link the repository's \`plugin/\` directory." \
+            --notes "Install: \`pnpm add <the .tgz asset>\` from this release, or \`pnpm add link:<repository path>\`." \
             || gh release upload "$TAG" dist/*.tgz --clobber
