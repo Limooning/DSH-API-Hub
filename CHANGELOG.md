@@ -12,7 +12,7 @@
 - 检测失败的行有「重试」；改 Base URL 后 400ms 自动重测
 - **配置文件格式放宽**：除 `.json` 外还认 `.toml` 与 `.env` / `*.env`（以前只在 `.json` 里找 Key）；导入后每次读 Key 都走同一个解析器，TOML / `.env` 里存的 Key 导入后仍然可用
 - **`.toml` / `.env` 只读**：面板不会把 JSON 写回这些文件（会毁掉注释与格式），改 Key 时直接提示「请改原文件」
-- **技能来源放宽**：除 `~/.dsh/skills` 外，也扫其它 agent 的技能目录（`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.cursor/skills`、`~/.continue/skills`），`SKILL.md` 顶部有 `name` / `description` 就有「复制到 DSH」，列表里标出来自哪个 agent
+- **技能来源放宽**：除 `~/.dsh/skills` 外，也扫其它 agent 的技能目录（`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.cursor/skills`、`~/.continue/skills`、`~/.cc-switch/skills`），`SKILL.md` 顶部有 `name` / `description` 就有「复制到 DSH」，列表里标出来自哪个 agent；`.system` / `.disabled` 这类隐藏目录跳过
 - **鉴权头按实际结果定**：`Authorization: Bearer` 被 401/403 拒掉时改试 `x-api-key` / `api-key`，能通的把写法记在 provider 的 `auth` 上，之后 `/api/test`、余额、模型、请求接口都照它发；原来只会发 Bearer，碰到这类中转一律被当成 Key 无效
 - **协议不兼容要说清楚**：Anthropic 原生（`/v1/messages`）与 Gemini 原生（`models?key=`）能验证 Key 有效，但会明确告知「面板只调 OpenAI 兼容接口，未导入」，而不是假装导入成功
 - **同一把 Key 只列一行**：Hash 后按值去重，优先保留路径最短的那份（正式配置优先于技能目录或项目里的副本）；已经导入过的 Key 即使又出现在别的文件里也不再重复推荐

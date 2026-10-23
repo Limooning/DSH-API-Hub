@@ -30,7 +30,7 @@
 - **检索本机**：只列出本机已有、面板里还没有的接口与技能。来源三类——
   - **凭据与环境变量**：`~/.dsh/.credentials.yaml` 的 `refs`、进程环境里的 `*_API_KEY` / `*_KEY`；
   - **配置文件**：默认目录（`~`、`~/.config`、`~/.dsh`、`%APPDATA%`，macOS 另加 `~/Library/Application Support`，深度 3）里的 `.json`、`.toml`、`.env`，识别 `apiKey` / `api_key` / `*_API_KEY` / `token` 字段，取同级最近的 URL 作为 Base URL，没有 URL 时按字段名或文件名推断厂商；`.example` / `.sample` / `.template` 这类模板文件跳过；
-  - **技能**：`~/.dsh/skills` 之外的其它 agent 技能目录（`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.cursor/skills`、`~/.continue/skills`），只要 `SKILL.md` 顶部有 `name` / `description` 就能「复制到 DSH」。
+  - **技能**：`~/.dsh/skills` 之外的其它 agent 技能目录（`~/.codex/skills`、`~/.claude/skills`、`~/.agents/skills`、`~/.cursor/skills`、`~/.continue/skills`、`~/.cc-switch/skills`），只要 `SKILL.md` 顶部有 `name` / `description` 就能「复制到 DSH」；`.system` / `.disabled` 这类隐藏目录跳过。
 
   没有写死任何厂商的文件名：默认目录里的配置自动识别，放在别处的用「添加扫描位置」指定文件路径与字段路径。Key 留在原文件，导入只记录路径与字段（`.toml` / `.env` 只读不写，改 Key 请直接改原文件）。同一个 Key 写在几个文件里只列一行。
 - **调通才允许导入**：每一行都会拿它的 Key 真的打一次接口，2xx 才点亮「导入」，调不通的行直接显示原因（`Key 被接口拒绝（HTTP 401）`、`Base URL 不对：…`、`连不上`），服务端写入前还会再验一次。鉴权头同样按实际结果定：`Authorization: Bearer` 被 401/403 拒掉时会改试 `x-api-key` / `api-key`，能通的把这种写法记在 provider 上，之后的测试与请求都照它发。Anthropic 原生（`/v1/messages`）与 Gemini 原生（`models?key=`）协议会被明确告知「面板只调 OpenAI 兼容接口」，而不是假装导入成功。
