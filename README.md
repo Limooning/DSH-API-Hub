@@ -27,6 +27,7 @@
 - **移除**：确认后移出面板；面板自己管理的 Key 文件会一并删除
 - **拖拽排序**：拖动卡片调整顺序，写回 `providers.json` 的数组顺序
 - **＋ 添加接口**：填 Base URL 和 Key → 自动探测模型目录 → 勾选模型 → 保存
+- **检索本机**：扫描 DSH 凭据库和环境变量里的 API Key、以及 Codex 等其它 agent 工具的技能目录，识别出的条目点一下就能导入/复制（不点不写任何东西）
 
 **技能页**
 
@@ -42,7 +43,7 @@
 dsh plugin --profile desktop add dsh-api-hub
 
 # 从本地 tarball（Release 附件）
-dsh plugin --profile desktop add C:\path\dsh-api-hub-0.4.4.tgz
+dsh plugin --profile desktop add C:\path\dsh-api-hub-0.5.0.tgz
 
 # 从源码（开发态，改动即时生效）
 dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub
@@ -123,6 +124,7 @@ pnpm add link:<仓库路径>        # 或 pnpm add <tgz 路径>
 |---|---|
 | `dsh-credentials` | DSH 凭据库 `~/.dsh/.credentials.yaml` 的 `refs.<ref>` |
 | `json` | 任意 JSON 文件的某个字段（`path` + `jsonPath`） |
+| `env` | 环境变量名（`name`），适合从 shell 里传 Key 的场景 |
 | 面板添加的接口 | 默认 `~/.dsh/api-hub/keys/<id>.json` 的 `apiKey` |
 
 写入是**就地更新**：`refs` 之外的记录、JSON 的其它字段与缩进风格都保留；值没变时文件逐字节不变。
@@ -157,7 +159,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.4.4**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.5.0**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新

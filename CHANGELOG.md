@@ -3,6 +3,12 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.5.0
+
+- 新增「检索」：扫描 DSH 凭据库、环境变量里的 API Key，以及 Codex / Claude / agents 的技能目录
+- 识别到的凭据按已知服务商（DeepSeek、OpenAI、百炼、Moonshot、SiliconFlow、OpenRouter、Groq、Gemini）预填 Base URL，一键导入为接口
+- 其它 agent 工具的技能可一键复制到 `~/.dsh/skills`（重名会拒绝，路径限定在已知目录内）
+- 新增 `keySource.type = "env"`：接口可以直接引用环境变量，Key 不落盘
 ## 0.4.4
 
 - 「接口」标签显示启用数 / 总数，与「技能」标签一致
