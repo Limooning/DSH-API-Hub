@@ -36,6 +36,12 @@ for (const path of ["/api/health", "/api/state", "/api/skills", "/api/nope"]) ou
 out.rename = await post("/api/panel/title", { title: "  接口\\n台  " });
 out.renameEmpty = await post("/api/panel/title", { title: "   " });
 out.afterRename = await call("/api/state");
+const first = JSON.parse(out["/api/state"].body).providers[0].id;
+out.firstId = first;
+out.cardRename = await post("/api/providers/rename", { id: first, name: "  我的 中转\\n " });
+out.cardRenameEmpty = await post("/api/providers/rename", { id: first, name: " " });
+out.cardRenameUnknown = await post("/api/providers/rename", { id: "nope", name: "x" });
+out.afterCardRename = await call("/api/state");
 console.log("PROBE " + JSON.stringify(out));
 `;
 
@@ -98,6 +104,15 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(JSON.parse(out.rename.body).title, "接口 台");
     assert.equal(out.renameEmpty.code, 400);
     assert.equal(JSON.parse(out.afterRename.body).title, "接口 台");
+
+    // A card title is the user's label for that endpoint, not an identifier:
+    // rename it, keep the id, and refuse blank or unknown ones.
+    assert.equal(out.cardRename.code, 200);
+    assert.equal(JSON.parse(out.cardRename.body).name, "我的 中转");
+    assert.equal(JSON.parse(out.afterCardRename.body).providers[0].name, "我的 中转");
+    assert.equal(JSON.parse(out.afterCardRename.body).providers[0].id, out.firstId);
+    assert.equal(out.cardRenameEmpty.code, 400);
+    assert.equal(out.cardRenameUnknown.code, 404);
 
     assert.equal(existsSync(join(home, ".dsh", "api-hub", "providers.json")), true);
   } finally {
