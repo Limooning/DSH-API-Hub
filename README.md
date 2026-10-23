@@ -49,7 +49,7 @@
 dsh plugin --profile desktop add dsh-api-hub
 
 # 从本地 tarball（Release 附件）
-dsh plugin --profile desktop add C:\path\dsh-api-hub-0.5.1.tgz
+dsh plugin --profile desktop add C:\path\dsh-api-hub-0.6.0.tgz
 
 # 从源码（开发态，改动即时生效）
 dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub
@@ -165,7 +165,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.5.1**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.6.0**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新
