@@ -322,3 +322,29 @@ test("TOML and .env sources import, survive a dedupe, and remember the header st
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("the model list decides whether an endpoint is a chat or a media API", async () => {
+  const { classifyKind } = await import(SERVER_URL);
+
+  const image = classifyKind([
+    "image:gpt-image-2-5-flare-official",
+    "image:gpt-image-2.5-sunburst-adobe",
+    "gpt-image-2.5-sunburst",
+  ]);
+  assert.equal(image.kind, "image", JSON.stringify(image));
+  assert.equal(image.media, 3);
+  assert.equal(image.known, true);
+
+  const chat = classifyKind([{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }, "gpt-4o-mini"]);
+  assert.equal(chat.kind, "llm", JSON.stringify(chat));
+
+  // A relay reselling one image model among several chat models is still a chat API.
+  const mixed = classifyKind(["qwen3.8-max", "qwen-vl-max", "qwen-image", "text-embedding-3-small"]);
+  assert.equal(mixed.kind, "llm", JSON.stringify(mixed));
+  assert.equal(mixed.media, 1);
+  assert.equal(mixed.chat, 2, "embeddings are not chat models");
+
+  const unknown = classifyKind([]);
+  assert.equal(unknown.kind, "llm");
+  assert.equal(unknown.known, false);
+});

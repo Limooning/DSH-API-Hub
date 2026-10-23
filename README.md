@@ -26,7 +26,7 @@
 - **请求**：GET/POST + JSON 请求体，带 Key 直发，显示状态码、耗时、响应体
 - **移除**：确认后移出面板；面板自己管理的 Key 文件会一并删除
 - **拖拽排序**：拖动卡片调整顺序，写回 `providers.json` 的数组顺序
-- **＋ 添加接口**：填 Base URL 和 Key → 自动探测模型目录 → 勾选模型 → 保存
+- **＋ 添加接口**：填 Base URL 和 Key → 自动探测模型目录 → 自动判断是文本还是图片/视频接口（按模型名投票，可手动改）→ 勾选模型 → 保存
 - **检索本机**：只列出本机已有、面板里还没有的接口与技能。自动扫描只覆盖 DSH 自己的目录，剩下的靠手动添加——
   - **凭据与环境变量**：`~/.dsh/.credentials.yaml` 的 `refs`、进程环境里的 `*_API_KEY` / `*_KEY`；
   - **配置文件**：`~/.dsh` 下的 `.json`、`.toml`、`.env`（深度 4），识别 `apiKey` / `api_key` / `*_API_KEY` / `token` 字段，取同级最近的 URL 作为 Base URL，没有 URL 时按字段名或文件名推断厂商；`.example` / `.sample` / `.template` 这类模板文件跳过；
@@ -49,7 +49,7 @@
 dsh plugin --profile desktop add dsh-api-hub
 
 # 从本地 tarball（Release 附件）
-dsh plugin --profile desktop add C:\path\dsh-api-hub-0.6.0.tgz
+dsh plugin --profile desktop add C:\path\dsh-api-hub-0.6.1.tgz
 
 # 从源码（开发态，改动即时生效）
 dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub
@@ -165,7 +165,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.6.0**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.6.1**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新
