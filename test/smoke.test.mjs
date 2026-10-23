@@ -366,5 +366,5 @@ test("the model list decides whether an endpoint is a chat or a media API", asyn
   // Only ticked models count, so an image-only tick on a mixed catalog stays 图片.
   const onlyImages = classifyKind(["gpt-image-2", "sora-2"]);
   assert.deepEqual(onlyImages.kinds, ["image"]);
-  assert.equal(onlyImages.label, "图片/视频");
+  assert.equal(onlyImages.label, "图片 · 视频");
 });
