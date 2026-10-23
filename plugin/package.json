@@ -1,6 +1,6 @@
 {
   "name": "dsh-api-hub",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "API Hub — manage and call local API providers (keys, models, balances) and skills from inside DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
@@ -32,5 +32,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
   }
 }

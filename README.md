@@ -56,7 +56,7 @@ Windows 与 macOS 的步骤一致，只有路径写法不同（`D:\...\plugin` /
 
 ```powershell
 cd <仓库>/plugin
-pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.3.1.tgz
+pnpm pack --pack-destination .            # 生成 dsh-api-hub-0.3.2.tgz
 cd ~/.dsh/profiles/desktop
 pnpm add <上面 tgz 的绝对路径>
 ```
@@ -146,7 +146,7 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
-当前版本：**v0.3.1**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
+当前版本：**v0.3.2**。每个版本都打 tag，`git tag -n` 可以看到全部。推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
 # 更新到最新
