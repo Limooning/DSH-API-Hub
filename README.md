@@ -131,6 +131,42 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 上游需求已整理成可直接提交的 issue：[`docs/upstream/settings-section-icon.md`](docs/upstream/settings-section-icon.md)。
 
+## 版本与更新
+
+当前版本：**v0.2.0**。每个版本都打 tag，`git tag -n` 可以看到全部。
+
+```powershell
+# 更新到最新
+cd ~/.dsh/api-hub
+git pull --ff-only
+
+# 查看有哪些版本 / 某个版本改了什么
+git tag -n
+git show v0.2.0 --stat
+```
+
+想临时跑某个旧版本，用 `worktree` 开一个并行副本，不影响正在用的那份：
+
+```powershell
+git worktree add ../api-hub-v0.2.0 v0.2.0
+# 把 profile 里的 link 指向 ../api-hub-v0.2.0/plugin，重启 DSH
+git worktree remove ../api-hub-v0.2.0    # 用完清理
+```
+
+发布新版本的流程（仓库公开后**不要 force push**）：
+
+```powershell
+# 1) 改代码、正常提交
+git commit -am "feat: ..."
+
+# 2) 改 plugin/package.json 的 version，然后打 tag
+git tag -a v0.2.1 -m "v0.2.1 — 变更说明"
+
+# 3) 推送提交和 tag
+git push
+git push origin v0.2.1
+```
+
 ## 开发
 
 不需要构建，改完按下面的方式生效：
