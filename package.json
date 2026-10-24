@@ -1,6 +1,6 @@
 {
   "name": "dsh-api-hub",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "API Hub — manage and call local API providers (keys, models, balances) and skills from inside DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
