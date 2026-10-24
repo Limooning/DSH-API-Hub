@@ -615,3 +615,39 @@ test("the model list decides whether an endpoint is a chat or a media API", asyn
   assert.deepEqual(onlyImages.kinds, ["image"]);
   assert.equal(onlyImages.label, "图片 · 视频");
 });
+
+// The host half is what decides whether key edits go through DSH's credential
+// service. A fake cordis context is enough to check the handoff: `apply` mounts
+// the route, and the route must answer `credentials: true` once the service is
+// there — which also proves the service reaches every newly imported revision of
+// the backend, not just the first one.
+test("the host half hands the credential service to the backend", async () => {
+  const hostUrl = pathToFileURL(fileURLToPath(new URL("../lib/index.js", import.meta.url))).href + "?host=" + Date.now();
+  const { apply } = await import(hostUrl);
+  let handler = null;
+  const ctx = {
+    inject(names, callback) {
+      const host = {};
+      if (names.includes("webServer")) {
+        host.webServer = {
+          register(route) { handler = route.handler; return () => {}; },
+          getOrigin: () => "http://127.0.0.1:1",
+        };
+      }
+      if (names.includes("credentials")) {
+        host.credentials = { set: async () => {}, unset: async () => {} };
+      }
+      callback(host);
+    },
+    effect(run) { return run(); },
+    on() {},
+    logger: { warn() {} },
+  };
+  apply(ctx);
+  assert.ok(handler, "the panel routes were never mounted");
+
+  const res = { code: 0, body: "", writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
+  await handler({ method: "GET", url: "/api-hub/api/health", headers: {}, on() { return this; } }, res);
+  assert.equal(res.code, 200);
+  assert.equal(JSON.parse(res.body).credentials, true);
+});
