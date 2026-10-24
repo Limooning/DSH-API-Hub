@@ -194,6 +194,141 @@ out.removeAgents = await post("/api/skills/remove", { id: "agents-demo" });
 console.log("PROBE " + JSON.stringify(out));
 `;
 
+// Four edges that only show up when the same endpoint changes owner: a provider
+// that gets no route of its own must still land its key, a reference nobody
+// points at must be swept, an endpoint can opt into a route of its own, and a
+// route this DSH cannot prune must stay owned instead of being forgotten.
+const EDGES = `
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { handleRequest, useCredentialService, useSettingsService } from ${JSON.stringify(SERVER_URL)};
+const home = process.env.USERPROFILE || process.env.HOME;
+const call = async (path) => {
+  const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
+  const req = { method: "GET", url: path, headers: {}, on(event, cb) { if (event === "end") cb(); return this; } };
+  await handleRequest(req, res, "");
+  return { code: res.code, body: res.body };
+};
+const post = async (path, body) => {
+  const payload = JSON.stringify(body);
+  const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
+  const req = {
+    method: "POST", url: path, headers: {},
+    on(event, cb) { if (event === "data") cb(payload); else if (event === "end") cb(); return this; },
+  };
+  await handleRequest(req, res, "");
+  return { code: res.code, body: res.body };
+};
+const out = {};
+const dataDir = join(home, ".dsh", "api-hub");
+const keysDir = join(dataDir, "keys");
+const credsFile = join(home, ".dsh", ".credentials.yaml");
+const regFile = join(dataDir, "providers.json");
+const ownedFile = join(dataDir, "dsh-routes.json");
+mkdirSync(keysDir, { recursive: true });
+
+// The store already holds DSH's own key, plus a reference 0.8.5 left behind.
+writeFileSync(credsFile, "version: 1\\nrefs:\\n  DEEPSEEK_API_KEY: sk-dsh\\n  APIHUB_LEFTOVER_API_KEY: sk-old\\nrecords:\\n", "utf8");
+writeFileSync(join(keysDir, "deepseek.json"), JSON.stringify({ key: "sk-panel" }), "utf8");
+
+// The registry appears on the first request, seeded from the bundled example.
+await call("/api/state");
+const reg = JSON.parse(readFileSync(regFile, "utf8"));
+reg.providers = [{
+  id: "deepseek-api",
+  name: "DeepSeek 官方",
+  kind: "llm",
+  baseURL: "https://api.deepseek.com",
+  protocol: "openai",
+  enabled: true,
+  keySource: { type: "json", path: join(keysDir, "deepseek.json"), jsonPath: ["key"] },
+  selectedModels: ["deepseek-chat"],
+  defaultModel: "deepseek-chat",
+}];
+reg.defaults = { llm: "deepseek-api", image: null };
+writeFileSync(regFile, JSON.stringify(reg, null, 2), "utf8");
+
+const sets = [];
+const unsets = [];
+const updates = [];
+// Behaves like the real store: a write is visible to the next read, and an
+// unset really removes the reference, so the sweep is exercised end to end.
+const setRef = (ref, value) => {
+  const text = readFileSync(credsFile, "utf8");
+  const line = "  " + ref + ": " + value;
+  const rows = text.split("\\n");
+  const at = rows.findIndex((row) => row.startsWith("  " + ref + ":"));
+  if (at === -1) rows.splice(rows.indexOf("refs:") + 1, 0, line);
+  else rows[at] = line;
+  writeFileSync(credsFile, rows.join("\\n"), "utf8");
+};
+const unsetRef = (ref) => {
+  const rows = readFileSync(credsFile, "utf8").split("\\n").filter((row) => !row.startsWith("  " + ref + ":"));
+  writeFileSync(credsFile, rows.join("\\n"), "utf8");
+};
+const service = {
+  set: (ref, value) => { sets.push([ref, value]); setRef(ref, value); return Promise.resolve(); },
+  unset: (ref) => { unsets.push(ref); unsetRef(ref); return Promise.resolve(); },
+};
+useCredentialService(service);
+useSettingsService({
+  read: () => ({ providers: {} }),
+  update: (patch) => { updates.push(patch); return Promise.resolve(); },
+  remove: () => Promise.resolve(),
+});
+
+// No route, but the key still has to reach the store that DSH reads.
+out.carriedPlan = JSON.parse((await call("/api/dsh/plan")).body);
+out.carriedSync = JSON.parse((await post("/api/dsh/sync", {})).body);
+out.keyPresent = (JSON.parse((await call("/api/state")).body).providers[0] || {}).keyPresent;
+out.carriedSets = sets.slice();
+out.carriedUnsets = unsets.slice();
+out.ownedAfterCarried = existsSync(ownedFile) ? JSON.parse(readFileSync(ownedFile, "utf8")).ids : [];
+
+// Same endpoint, but the user wants a row of its own.
+out.routeOwn = (await post("/api/providers/route", { id: "deepseek-api", own: true })).code;
+out.ownPlan = JSON.parse((await call("/api/dsh/plan")).body);
+out.ownSync = JSON.parse((await post("/api/dsh/sync", {})).body);
+out.ownRef = (updates.at(-1)?.providers?.["deepseek-api"] || {}).apiKeyEnv || "";
+
+// Removing it must not take DSH's own key with it, but its own reference goes.
+unsets.length = 0;
+out.removed = (await post("/api/providers/remove", { id: "deepseek-api" })).code;
+out.removeUnsets = unsets.slice();
+
+// A route this DSH cannot prune: ownership has to survive, not be forgotten.
+writeFileSync(regFile, JSON.stringify({
+  version: reg.version ?? 1,
+  defaults: { llm: "relay", image: null },
+  providers: [{
+    id: "relay",
+    name: "中转",
+    kind: "llm",
+    baseURL: "https://relay.example.com/v1",
+    protocol: "openai",
+    enabled: true,
+    keySource: { type: "json", path: join(keysDir, "relay.json"), jsonPath: ["key"] },
+    selectedModels: ["relay-large"],
+    defaultModel: "relay-large",
+  }],
+}, null, 2), "utf8");
+writeFileSync(join(keysDir, "relay.json"), JSON.stringify({ key: "sk-relay" }), "utf8");
+writeFileSync(ownedFile, JSON.stringify({ ids: ["gone", "relay"] }, null, 2), "utf8");
+useCredentialService(service);
+useSettingsService({
+  // The stale row is really in the section, and this service cannot unset a
+  // key: the panel wants it gone but cannot make it so, so ownership must not
+  // say otherwise.
+  read: () => ({ providers: { gone: { displayName: "gone" }, relay: { displayName: "relay" } } }),
+  update: () => Promise.resolve(),
+});
+out.stuckSync = JSON.parse((await post("/api/dsh/sync", {})).body);
+out.ownedAfterStuck = JSON.parse(readFileSync(ownedFile, "utf8")).ids;
+useSettingsService(null);
+useCredentialService(null);
+console.log("EDGES " + JSON.stringify(out));
+`;
+
 // A directory a child process just released can still be locked for a moment on
 // Windows, and an interrupted run leaves its throwaway home behind. Sweeping at
 // start keeps those from piling up in %TEMP%; anything young enough to belong to
@@ -219,16 +354,16 @@ function sweepStaleHomes() {
 }
 sweepStaleHomes();
 
-function probeInFreshHome() {
+function probeInFreshHome(source = PROBE, tag = "PROBE") {
   const home = mkdtempSync(join(tmpdir(), "api-hub-test-"));
-  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", PROBE], {
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", source], {
     env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, "probe failed:\n" + result.stderr);
-  const line = result.stdout.split("\n").find((row) => row.startsWith("PROBE "));
+  const line = result.stdout.split("\n").find((row) => row.startsWith(tag + " "));
   assert.ok(line, "probe produced no result:\n" + result.stdout);
-  return { home, out: JSON.parse(line.slice("PROBE ".length)) };
+  return { home, out: JSON.parse(line.slice(tag.length + 1)) };
 }
 
 test("a fresh home gets a seeded registry and healthy routes", () => {
@@ -1037,4 +1172,41 @@ test("the declared DSH range reads the same way DSH reads it", async () => {
   // Anything that is not a version must not be reported as a mismatch.
   assert.equal(satisfiesRange("garbage", range), null);
   assert.equal(satisfiesRange("0.2.1-rc.2", "not a range"), null);
+});
+// The same endpoint can be owned by DSH or by a route of its own, and a key
+// only has to reach one place either way. These four edges are what made the
+// ownership model confusing, so each one is pinned down here.
+test("a carried endpoint still lands its key, and ownership survives a prune it cannot do", () => {
+  const { home, out } = probeInFreshHome(EDGES, "EDGES");
+  try {
+    // No route: DSH carries the endpoint, so the panel only feeds the key.
+    assert.deepEqual(out.carriedPlan.builtin.map((row) => row.provider), ["deepseek-official"]);
+    assert.equal(out.carriedPlan.routes.length, 0);
+    assert.equal(out.carriedSync.routes, 0);
+    // The key landed even though nothing was routed, and the 0.8.5 leftover is gone.
+    assert.deepEqual(out.carriedSets, [["DEEPSEEK_API_KEY", "sk-panel"]], JSON.stringify(out.carriedSync));
+    assert.equal(out.carriedUnsets.includes("APIHUB_LEFTOVER_API_KEY"), true);
+    assert.equal(out.carriedUnsets.includes("DEEPSEEK_API_KEY"), false);
+    assert.deepEqual(out.ownedAfterCarried, []);
+
+    // Asking for a route of its own is allowed on the same endpoint.
+    assert.equal(out.routeOwn, 200);
+    assert.deepEqual(out.ownPlan.routes.map((row) => row.id), ["deepseek-api"]);
+    assert.equal(out.ownRef.startsWith("APIHUB_"), true);
+    assert.equal(out.ownSync.routes, 1);
+
+    // Deleting the provider drops the reference it owned, never DSH's key.
+    assert.equal(out.removed, 200);
+    assert.equal(out.removeUnsets.includes("DEEPSEEK_API_KEY"), false);
+    assert.equal(out.removeUnsets.includes(out.ownRef), true);
+
+    // A settings service that cannot unset a key cannot prune either: the row
+    // is reported as stuck, and ownership keeps saying the panel owns it.
+    assert.equal(out.stuckSync.pruned.length, 0);
+    assert.deepEqual(out.stuckSync.stuck, ["gone"]);
+    assert.equal(out.ownedAfterStuck.includes("gone"), true);
+    assert.equal(out.ownedAfterStuck.includes("relay"), true);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
