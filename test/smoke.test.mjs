@@ -16,7 +16,7 @@ const SERVER_URL = pathToFileURL(fileURLToPath(new URL("../lib/server.mjs", impo
 const PROBE = `
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { handleRequest, useCredentialService } from ${JSON.stringify(SERVER_URL)};
+import { handleRequest, useCredentialService, useSettingsService } from ${JSON.stringify(SERVER_URL)};
 const home = process.env.USERPROFILE || process.env.HOME;
 const call = async (path) => {
   const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
@@ -89,6 +89,26 @@ useCredentialService(null);
 out.healthAfterDetach = JSON.parse((await call("/api/health")).body).credentials;
 out.keyViaFile = await post("/api/key", { id: "deepseek-api", key: "sk-through-file-222222" });
 out.credsFileAfterFileWrite = readFileSync(credsFile, "utf8");
+
+// The panel can also hand these endpoints to DSH itself: every chat endpoint
+// becomes a llm-pi-ai route, so the models show up in DSH's own picker. The
+// settings section is written through the settings service; without one the
+// routes stay untouched and the panel says so.
+const settingsCalls = [];
+const fakeSettings = {
+  read: () => ({ providers: { keepme: { displayName: "keep" } } }),
+  update: (patch) => { settingsCalls.push(patch); return Promise.resolve(); },
+};
+out.planBeforeAttach = JSON.parse((await call("/api/dsh/plan")).body);
+out.syncNoService = await post("/api/dsh/sync", {});
+useCredentialService(fakeService);
+useSettingsService(fakeSettings);
+out.planAfterAttach = JSON.parse((await call("/api/dsh/plan")).body);
+out.sync = await post("/api/dsh/sync", {});
+out.settingsCalls = settingsCalls;
+useSettingsService(null);
+useCredentialService(null);
+
 out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 
@@ -213,6 +233,25 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.healthAfterDetach, false);
     assert.equal(out.keyViaService.code, 200);
     assert.deepEqual(out.credCalls, [{ op: "set", ref: "DEEPSEEK_API_KEY", value: "sk-through-service-111111" }]);
+
+    // A chat endpoint becomes one DSH route: the adapter speaks the OpenAI chat
+    // protocol, the key is a credential ref, and the model list is what the panel
+    // last probed. Existing routes in that section are left alone.
+    assert.equal(out.planBeforeAttach.settings, false);
+    assert.equal(out.syncNoService.code, 501);
+    assert.equal(out.planAfterAttach.settings, true);
+    assert.equal(out.planAfterAttach.routes.length, 1);
+    assert.equal(out.planAfterAttach.routes[0].id, "deepseek-api");
+    assert.equal(out.planAfterAttach.routes[0].ref, "DEEPSEEK_API_KEY");
+    assert.deepEqual(out.planAfterAttach.routes[0].models, ["deepseek-flash"]);
+    assert.equal(out.sync.code, 200);
+    assert.equal(JSON.parse(out.sync.body).routes, 1);
+    const written = out.settingsCalls[0].providers;
+    assert.equal(written["deepseek-api"].api, "openai-completions");
+    assert.equal(written["deepseek-api"].apiKeyEnv, "DEEPSEEK_API_KEY");
+    assert.equal(written["deepseek-api"].baseURL, "https://api.deepseek.com");
+    assert.deepEqual(written["deepseek-api"].models, [{ id: "deepseek-flash" }]);
+    assert.ok(written.keepme, "an unrelated route in the same section must survive");
     assert.match(out.credsFileAfterServiceWrite, /DEEPSEEK_API_KEY: sk-old-value-000000/);
     assert.equal(out.keyViaFile.code, 200);
     assert.match(out.credsFileAfterFileWrite, /DEEPSEEK_API_KEY: sk-through-file-222222/);
