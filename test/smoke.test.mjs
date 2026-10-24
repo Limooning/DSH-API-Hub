@@ -762,7 +762,7 @@ const MODELS = `
 import http from "node:http";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+import { handleRequest, useSettingsService } from ${JSON.stringify(SERVER_URL)};
 
 const home = process.env.USERPROFILE || process.env.HOME;
 mkdirSync(join(home, ".dsh", "api-hub"), { recursive: true });
@@ -834,6 +834,32 @@ const cleared = view(await call("/api/models", { id: "fake-relay", selected: [] 
 const order = JSON.parse((await call("/api/models?id=order-relay")).body);
 const filled = await call("/api/request", { id: "order-relay", method: "POST", path: "/chat/completions", body: { messages: [] } });
 const explicit = await call("/api/request", { id: "order-relay", method: "POST", path: "/chat/completions", body: { model: "m1", messages: [] } });
+
+// Nobody presses a sync button for this: saving a selection has to reach the
+// settings section on its own, or DSH keeps offering yesterday's models.
+const autoWrites = [];
+const autoSection = { providers: {} };
+useSettingsService({
+  read: () => ({ providers: autoSection.providers }),
+  update: (patch) => {
+    autoWrites.push(patch);
+    autoSection.providers = patch.providers;
+    return Promise.resolve();
+  },
+});
+const autoSave = view(await call("/api/models", { id: "fake-relay", selected: ["m2", "m3"], defaultModel: "m2" }));
+await new Promise((done) => setTimeout(done, 700));
+const autoRoute = autoSection.providers["fake-relay"] || null;
+const planAfterAuto = JSON.parse((await call("/api/dsh/plan")).body);
+const auto = {
+  saved: autoSave.selected,
+  wrote: autoWrites.length,
+  models: autoRoute ? autoRoute.models.map((model) => model.id) : null,
+  drift: planAfterAuto.drift,
+  lastOk: planAfterAuto.last ? planAfterAuto.last.ok : null,
+};
+useSettingsService(null);
+
 const ordered = {
   first: order.list[0] && order.list[0].id,
   def: order.defaultModel,
@@ -844,7 +870,7 @@ const ordered = {
 };
 upstream.close();
 panel.close();
-console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared, ordered }));
+console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared, ordered, auto }));
 `;
 
 function modelsInFreshHome() {
@@ -892,6 +918,13 @@ test("saving a model selection cannot wipe it by omission", () => {
     assert.equal(out.ordered.filledModel, "m3");
     assert.equal(out.ordered.explicitModel, "m1");
     assert.deepEqual(out.ordered.upstreamSaw, ["m3", "m1"]);
+
+    // A save alone reaches the settings section: no sync call, no page open.
+    assert.deepEqual(out.auto.saved, ["m2", "m3"]);
+    assert.equal(out.auto.wrote > 0, true, "the registry write never reached DSH");
+    assert.deepEqual(out.auto.models, ["m2", "m3"]);
+    assert.equal(out.auto.drift, false);
+    assert.equal(out.auto.lastOk, true);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
