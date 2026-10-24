@@ -16,7 +16,7 @@ const SERVER_URL = pathToFileURL(fileURLToPath(new URL("../lib/server.mjs", impo
 const PROBE = `
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+import { handleRequest, useCredentialService } from ${JSON.stringify(SERVER_URL)};
 const home = process.env.USERPROFILE || process.env.HOME;
 const call = async (path) => {
   const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
@@ -68,6 +68,27 @@ out.afterReorder = await call("/api/skills");
 out.orderFile = readFileSync(join(home, ".dsh", "api-hub", "skill-order.json"), "utf8");
 out.skillReorderBadType = await post("/api/skills/reorder", { order: "nope" });
 out.skillReorderEmpty = await post("/api/skills/reorder", { order: [] });
+
+// Key edits go through DSH's credential service when the host half attaches one.
+// The service owns the YAML, so the panel must not touch that file itself — and
+// with no service attached it still has to fall back to writing the file.
+const credCalls = [];
+const fakeService = {
+  set: (ref, value) => { credCalls.push({ op: "set", ref, value }); return Promise.resolve(); },
+  unset: (ref) => { credCalls.push({ op: "unset", ref }); return Promise.resolve(); },
+};
+const credsFile = join(home, ".dsh", ".credentials.yaml");
+writeFileSync(credsFile, "version: 1\\nrefs:\\n  DEEPSEEK_API_KEY: sk-old-value-000000\\nrecords:\\n", "utf8");
+out.healthBeforeAttach = JSON.parse((await call("/api/health")).body).credentials;
+useCredentialService(fakeService);
+out.healthAfterAttach = JSON.parse((await call("/api/health")).body).credentials;
+out.keyViaService = await post("/api/key", { id: "deepseek-api", key: "sk-through-service-111111" });
+out.credCalls = credCalls;
+out.credsFileAfterServiceWrite = readFileSync(credsFile, "utf8");
+useCredentialService(null);
+out.healthAfterDetach = JSON.parse((await call("/api/health")).body).credentials;
+out.keyViaFile = await post("/api/key", { id: "deepseek-api", key: "sk-through-file-222222" });
+out.credsFileAfterFileWrite = readFileSync(credsFile, "utf8");
 out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 
@@ -184,6 +205,17 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.deepEqual(JSON.parse(out.orderFile).order, ["demo-skill-b", "demo-skill"]);
     assert.equal(out.skillReorderBadType.code, 400);
     assert.equal(out.skillReorderEmpty.code, 400);
+
+    // With the credential service attached, a key edit is handed to it and the
+    // YAML stays exactly as DSH left it; detached, the file writer comes back.
+    assert.equal(out.healthBeforeAttach, false);
+    assert.equal(out.healthAfterAttach, true);
+    assert.equal(out.healthAfterDetach, false);
+    assert.equal(out.keyViaService.code, 200);
+    assert.deepEqual(out.credCalls, [{ op: "set", ref: "DEEPSEEK_API_KEY", value: "sk-through-service-111111" }]);
+    assert.match(out.credsFileAfterServiceWrite, /DEEPSEEK_API_KEY: sk-old-value-000000/);
+    assert.equal(out.keyViaFile.code, 200);
+    assert.match(out.credsFileAfterFileWrite, /DEEPSEEK_API_KEY: sk-through-file-222222/);
 
     // The list follows DSH's own roots: the project workspace, ~/.agents (a
     // folder plus a bare .md) and the differences between them.

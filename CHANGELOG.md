@@ -3,6 +3,17 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.6.10
+
+**目标：说明文字跟代码对齐，Key 写入交给 DSH 的凭据服务。**
+
+- **「扫描范围」不再写死路径**：凭据库、DSH 目录、技能目录现在由后端按实际值下发（`DSH_HOME`、`DSH_AGENTS_HOME` 生效，路径分隔符也跟随平台），把 DSH 数据目录搬走之后说明会跟着变，而不是继续写着 `~/.dsh`
+- **技能那一行补上了 0.6.9 的新来源**：`<DSH_HOME>/skills`、`<项目>/.dsh/skills`、`<AGENTS_HOME>/skills`，并说明单文件技能 `<名字>.md` 也算
+- **Key 写入改走 `ctx.credentials`**：宿主编件在拿到凭据服务后把它交给后端，改 Key 由服务写入——它持有该文件的锁、原子落盘、广播 `credentials/reference-updated`，两个写入方不会再互相覆盖，改完也不必重启 DSH
+- **没有凭据服务时照旧**：profile 没组装该服务、或后端版本较旧时退回直接写 YAML，此时「扫描范围」里会注明「改动直接写文件，需重启 DSH 生效」
+- `/api/health` 增加 `credentials` 字段，说明当前是否接上了服务；`scopes` 增加 `dshHome` / `agentsHome` / `credentials` / `managedSkills` / `credentialService` / `sep`
+- 测试补上：接上服务时写入交给服务且 YAML 原样未动、摘掉服务后回到文件写入
+
 ## 0.6.9
 
 **目标：技能列表和 DSH 自己看到的完全一致。**
