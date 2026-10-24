@@ -744,3 +744,94 @@ test("the README does not pin a version of its own", () => {
     .map((match) => match[0].replace(/\s+/g, " "));
   assert.deepEqual(pinned, [], "README 里写死了版本号，发布时会忘记改：" + pinned.join("、"));
 });
+
+// Saving a model selection used to treat a missing `selected` as "clear it", so a
+// malformed request (or a half-written body) could silently wipe a provider's
+// models — which is how this was found, by poking the live panel.
+const MODELS = `
+import http from "node:http";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+
+const home = process.env.USERPROFILE || process.env.HOME;
+mkdirSync(join(home, ".dsh", "api-hub"), { recursive: true });
+writeFileSync(join(home, ".dsh", ".credentials.yaml"), "version: 1\\nrefs:\\n  FAKE_KEY: sk-fake-0000000000000001\\nrecords:\\n", "utf8");
+writeFileSync(join(home, ".dsh", "api-hub", "providers.json"), JSON.stringify({
+  version: 1,
+  defaults: { llm: null, image: null },
+  providers: [{
+    id: "fake-relay", name: "假中转", kind: "llm", kinds: ["llm"], types: ["llm"],
+    enabled: true, baseURL: "https://example.invalid",
+    test: { method: "GET", path: "/models" },
+    keySource: { type: "dsh-credentials", ref: "FAKE_KEY" },
+    selectedModels: ["m1"], defaultModel: "m1",
+    modelsCache: { at: new Date().toISOString(), list: [{ id: "m1" }, { id: "m2" }, { id: "m3" }] },
+  }],
+}), "utf8");
+
+const panel = http.createServer(async (req, res) => {
+  try { await handleRequest(req, res, ""); } catch (e) { res.writeHead(500); res.end(String(e)); }
+});
+await new Promise((done) => panel.listen(0, "127.0.0.1", done));
+const base = "http://127.0.0.1:" + panel.address().port;
+const call = (path, body) => fetch(base + path, body === undefined ? {} : {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+}).then(async (r) => ({ code: r.status, body: await r.text() }));
+const view = (r) => {
+  const doc = JSON.parse(r.body);
+  const p = (doc.providers || []).find((x) => x.id === "fake-relay");
+  return { code: r.code, selected: p ? p.selectedModels : undefined, def: p ? p.defaultModel : undefined, dropped: doc.dropped };
+};
+
+const before = view(await call("/api/state"));
+const noField = view(await call("/api/models", { id: "fake-relay" }));
+const afterNoField = view(await call("/api/state"));
+const ghost = view(await call("/api/models", { id: "fake-relay", selected: ["m2", "ghost"] }));
+const picked = view(await call("/api/models", { id: "fake-relay", selected: ["m2", "m3"], defaultModel: "m3" }));
+const badDefault = view(await call("/api/models", { id: "fake-relay", selected: ["m2"], defaultModel: "m3" }));
+const cleared = view(await call("/api/models", { id: "fake-relay", selected: [] }));
+panel.close();
+console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared }));
+`;
+
+function modelsInFreshHome() {
+  const home = mkdtempSync(join(tmpdir(), "api-hub-models-"));
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", MODELS], {
+    env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, "models probe failed:\n" + result.stderr);
+  const line = result.stdout.split("\n").find((row) => row.startsWith("MODELS "));
+  assert.ok(line, "models probe produced no result:\n" + result.stdout);
+  return { home, out: JSON.parse(line.slice("MODELS ".length)) };
+}
+
+test("saving a model selection cannot wipe it by omission", () => {
+  const { home, out } = modelsInFreshHome();
+  try {
+    assert.equal(out.before.selected.length, 1);
+
+    // A body without `selected` is a client bug, not a request to clear.
+    assert.equal(out.noField.code, 400);
+    assert.deepEqual(out.afterNoField.selected, out.before.selected);
+    assert.equal(out.afterNoField.def, out.before.def);
+
+    // Ids the catalog no longer lists are reported instead of stored.
+    assert.equal(out.ghost.code, 200);
+    assert.deepEqual(out.ghost.selected, ["m2"]);
+    assert.deepEqual(out.ghost.dropped, ["ghost"]);
+    assert.equal(out.ghost.def, "m2");
+
+    assert.deepEqual(out.picked.selected, ["m2", "m3"]);
+    assert.equal(out.picked.def, "m3");
+    assert.equal(out.badDefault.code, 400);
+
+    // Clearing is still possible, but only when asked for explicitly.
+    assert.equal(out.cleared.code, 200);
+    assert.deepEqual(out.cleared.selected, []);
+    assert.equal(out.cleared.def, null);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
