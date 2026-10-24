@@ -767,6 +767,27 @@ import { handleRequest } from ${JSON.stringify(SERVER_URL)};
 const home = process.env.USERPROFILE || process.env.HOME;
 mkdirSync(join(home, ".dsh", "api-hub"), { recursive: true });
 writeFileSync(join(home, ".dsh", ".credentials.yaml"), "version: 1\\nrefs:\\n  FAKE_KEY: sk-fake-0000000000000001\\nrecords:\\n", "utf8");
+
+// An upstream that lists its models in the wrong order on purpose, and records
+// the model of every chat call, so the probe can see which one was used.
+const upstream = http.createServer((req, res) => {
+  let raw = "";
+  req.on("data", (chunk) => { raw += chunk; });
+  req.on("end", () => {
+    res.writeHead(200, { "content-type": "application/json" });
+    if (req.url.startsWith("/models")) {
+      res.end(JSON.stringify({ data: [{ id: "m1" }, { id: "m2" }, { id: "m3" }] }));
+      return;
+    }
+    const body = raw ? JSON.parse(raw) : null;
+    upstream.seen.push(body && body.model);
+    res.end(JSON.stringify({ ok: true, model: body && body.model }));
+  });
+});
+upstream.seen = [];
+await new Promise((done) => upstream.listen(0, "127.0.0.1", done));
+const upstreamBase = "http://127.0.0.1:" + upstream.address().port;
+
 writeFileSync(join(home, ".dsh", "api-hub", "providers.json"), JSON.stringify({
   version: 1,
   defaults: { llm: null, image: null },
@@ -777,6 +798,12 @@ writeFileSync(join(home, ".dsh", "api-hub", "providers.json"), JSON.stringify({
     keySource: { type: "dsh-credentials", ref: "FAKE_KEY" },
     selectedModels: ["m1"], defaultModel: "m1",
     modelsCache: { at: new Date().toISOString(), list: [{ id: "m1" }, { id: "m2" }, { id: "m3" }] },
+  }, {
+    id: "order-relay", name: "顺序中转", kind: "llm", kinds: ["llm"], types: ["llm"],
+    enabled: true, baseURL: upstreamBase,
+    test: { method: "GET", path: "/models" },
+    keySource: { type: "dsh-credentials", ref: "FAKE_KEY" },
+    selectedModels: ["m1", "m3"], defaultModel: "m3",
   }],
 }), "utf8");
 
@@ -801,8 +828,23 @@ const ghost = view(await call("/api/models", { id: "fake-relay", selected: ["m2"
 const picked = view(await call("/api/models", { id: "fake-relay", selected: ["m2", "m3"], defaultModel: "m3" }));
 const badDefault = view(await call("/api/models", { id: "fake-relay", selected: ["m2"], defaultModel: "m3" }));
 const cleared = view(await call("/api/models", { id: "fake-relay", selected: [] }));
+
+// The catalog leads with the default model, and a chat call that names none
+// carries the default instead of letting the upstream pick its first one.
+const order = JSON.parse((await call("/api/models?id=order-relay")).body);
+const filled = await call("/api/request", { id: "order-relay", method: "POST", path: "/chat/completions", body: { messages: [] } });
+const explicit = await call("/api/request", { id: "order-relay", method: "POST", path: "/chat/completions", body: { model: "m1", messages: [] } });
+const ordered = {
+  first: order.list[0] && order.list[0].id,
+  def: order.defaultModel,
+  selected: order.selected,
+  filledModel: JSON.parse(filled.body).model,
+  explicitModel: JSON.parse(explicit.body).model,
+  upstreamSaw: upstream.seen,
+};
+upstream.close();
 panel.close();
-console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared }));
+console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared, ordered }));
 `;
 
 function modelsInFreshHome() {
@@ -841,6 +883,15 @@ test("saving a model selection cannot wipe it by omission", () => {
     assert.equal(out.cleared.code, 200);
     assert.deepEqual(out.cleared.selected, []);
     assert.equal(out.cleared.def, null);
+
+    // The default model leads the catalog even though upstream listed m1 first,
+    // and a chat body with no model carries the default instead of the first id.
+    assert.equal(out.ordered.first, "m3");
+    assert.equal(out.ordered.def, "m3");
+    assert.deepEqual(out.ordered.selected, ["m1", "m3"]);
+    assert.equal(out.ordered.filledModel, "m3");
+    assert.equal(out.ordered.explicitModel, "m1");
+    assert.deepEqual(out.ordered.upstreamSaw, ["m3", "m1"]);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
