@@ -1231,3 +1231,118 @@ test("a carried endpoint still lands its key, and ownership survives a prune it 
     rmSync(home, { recursive: true, force: true });
   }
 });
+// ---- importing a models config -------------------------------------------------
+
+const IMPORT = `
+import { handleRequest } from ${JSON.stringify(SERVER_URL)};
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+const home = process.env.USERPROFILE || process.env.HOME;
+const post = async (path, body) => {
+  const payload = JSON.stringify(body);
+  const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
+  const req = { method: "POST", url: path, headers: {}, on(event, cb) { if (event === "data") cb(payload); else if (event === "end") cb(); return this; } };
+  await handleRequest(req, res, "");
+  return { code: res.code, body: res.body };
+};
+const call = async (path) => {
+  const res = { code: 0, body: "", writeHead(c) { this.code = c; }, end(b) { this.body = b; } };
+  const req = { method: "GET", url: path, headers: {}, on(event, cb) { if (event === "end") cb(); return this; } };
+  await handleRequest(req, res, "");
+  return { code: res.code, body: res.body };
+};
+const yaml = [
+  "providers:",
+  "  relay-one:",
+  "    displayName: 中转一号",
+  "    api: openai-completions",
+  "    baseURL: https://relay.example.com/v1/",
+  "    apiKey: sk-inline-secret",
+  "    models:",
+  "      - id: gpt-5",
+  "      - id: gpt-5-mini",
+  "  relay-two:",
+  "    api: openai-responses",
+  "    baseURL: https://relay2.example.com/v1",
+  "    apiKeyEnv: MISSING_REF",
+  "    models: [a, b]",
+  "",
+].join("\\n");
+const out = {};
+out.preview = await post("/api/providers/import", { text: yaml });
+out.empty = await post("/api/providers/import", { text: "   " });
+out.tab = await post("/api/providers/import", { text: "a:\\n\\tb: 1" });
+out.nothing = await post("/api/providers/import", { text: "hello: world" });
+out.beforeCount = JSON.parse((await call("/api/state")).body).providers.length;
+out.applied = await post("/api/providers/import", { text: yaml, apply: true, ids: ["relay-one"] });
+const after = JSON.parse((await call("/api/state")).body);
+out.added = after.providers.find((p) => p.id === "relay-one") || null;
+out.count = after.providers.length;
+out.keyFile = readFileSync(join(home, ".dsh", "api-hub", "keys", "relay-one.json"), "utf8");
+const second = yaml.replace("中转一号", "中转一号改名").replace("- id: gpt-5\\n", "- id: gpt-5-pro\\n");
+out.again = await post("/api/providers/import", { text: second, apply: true, ids: ["relay-one"] });
+const final = JSON.parse((await call("/api/state")).body);
+out.finalName = (final.providers.find((p) => p.id === "relay-one") || {}).name || null;
+out.finalCount = final.providers.length;
+out.finalModels = (final.providers.find((p) => p.id === "relay-one") || {}).selectedModels || null;
+console.log("IMPORT " + JSON.stringify(out));
+`;
+
+function importInFreshHome() {
+  const home = mkdtempSync(join(tmpdir(), "api-hub-import-"));
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", IMPORT], {
+    env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, "import probe failed:\n" + result.stderr);
+  const line = result.stdout.split("\n").find((row) => row.startsWith("IMPORT "));
+  assert.ok(line, "import probe produced no result:\n" + result.stdout);
+  return { home, out: JSON.parse(line.slice("IMPORT ".length)) };
+}
+
+test("a models YAML pastes straight into the panel", () => {
+  const { home, out } = importInFreshHome();
+  try {
+    // Preview: both entries read, only the one holding a key is importable.
+    const preview = JSON.parse(out.preview.body);
+    assert.equal(out.preview.code, 200);
+    assert.equal(preview.candidates.length, 2);
+    const one = preview.candidates.find((c) => c.id === "relay-one");
+    const two = preview.candidates.find((c) => c.id === "relay-two");
+    assert.equal(one.keyPresent, true);
+    assert.equal(one.baseURL, "https://relay.example.com/v1");
+    assert.equal(one.protocol, "OpenAI 兼容");
+    assert.deepEqual(one.models, ["gpt-5", "gpt-5-mini"]);
+    assert.equal(two.blocked.includes("MISSING_REF"), true);
+
+    // Refusals carry a reason instead of a stack trace.
+    assert.equal(out.empty.code, 400);
+    assert.match(JSON.parse(out.empty.body).error, /内容为空/);
+    assert.equal(out.tab.code, 400);
+    assert.match(JSON.parse(out.tab.body).error, /tab/);
+    assert.equal(out.nothing.code, 400);
+
+    // Applying only the ticked entry writes the key where the panel reads it.
+    assert.equal(out.applied.code, 200);
+    const applied = JSON.parse(out.applied.body);
+    assert.deepEqual(applied.imported.map((row) => row.id), ["relay-one"]);
+    assert.equal(applied.imported[0].created, true);
+    assert.deepEqual(applied.skipped.map((row) => row.id), ["relay-two"]);
+    assert.match(applied.skipped[0].reason, /勾选/);
+    assert.equal(out.count, out.beforeCount + 1);
+    assert.equal(out.added.name, "中转一号");
+    assert.equal(out.added.defaultModel, "gpt-5");
+    assert.deepEqual(out.added.selectedModels, ["gpt-5", "gpt-5-mini"]);
+    assert.equal(JSON.parse(out.keyFile).apiKey, "sk-inline-secret");
+    assert.equal(out.added.keyMasked.startsWith("sk-"), true);
+
+    // Pasting a newer copy updates that entry, it does not add a second one.
+    const again = JSON.parse(out.again.body);
+    assert.equal(again.imported[0].created, false);
+    assert.equal(out.finalCount, out.count);
+    assert.equal(out.finalName, "中转一号改名");
+    assert.deepEqual(out.finalModels, ["gpt-5-pro", "gpt-5-mini"]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
