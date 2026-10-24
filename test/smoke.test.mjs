@@ -916,6 +916,28 @@ const auto = {
 };
 useSettingsService(null);
 
+// The Models page mirror: read-only, so it must work off the sections list alone
+// and say so plainly when the host half is too old to offer it.
+const mirrorOff = JSON.parse((await call("/api/dsh/models")).body);
+useSettingsService({
+  read: () => null,
+  update: () => Promise.resolve(),
+  sections: () => [
+    { ns: "llm-deepseek", value: { apiKey: "••••••••" } },
+    { ns: "llm-pi-ai", value: { providers: {
+      "fake-relay": { displayName: "假中转", baseURL: "https://example.invalid", api: "openai-completions", apiKeyEnv: "FAKE_KEY", models: [{ id: "m2" }, { id: "m3" }] },
+      "by-hand": { displayName: "手加的回转", baseURL: "https://relay.invalid", api: "openai-completions", apiKeyEnv: "OTHER_KEY", models: [{ id: "x" }] },
+    } } },
+  ],
+});
+const mirrorOn = JSON.parse((await call("/api/dsh/models")).body);
+useSettingsService(null);
+const mirror = {
+  offOk: mirrorOff.ok,
+  offReason: Boolean(mirrorOff.reason),
+  rows: (mirrorOn.rows || []).map((row) => [row.name, row.origin, row.modelsCount]),
+};
+
 const ordered = {
   first: order.list[0] && order.list[0].id,
   def: order.defaultModel,
@@ -926,7 +948,7 @@ const ordered = {
 };
 upstream.close();
 panel.close();
-console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared, ordered, auto }));
+console.log("MODELS " + JSON.stringify({ before, noField, afterNoField, ghost, picked, badDefault, cleared, ordered, auto, mirror }));
 `;
 
 function modelsInFreshHome() {
@@ -981,6 +1003,16 @@ test("saving a model selection cannot wipe it by omission", () => {
     assert.deepEqual(out.auto.models, ["m2", "m3"]);
     assert.equal(out.auto.drift, false);
     assert.equal(out.auto.lastOk, true);
+
+    // The mirror is read-only: an older host half gets a reason, not a crash,
+    // and a host that offers `sections` gets every row with its owner labelled.
+    assert.equal(out.mirror.offOk, false);
+    assert.equal(out.mirror.offReason, true);
+    assert.deepEqual(out.mirror.rows, [
+      ["DeepSeek", "builtin", 0],
+      ["假中转", "panel", 2],
+      ["手加的回转", "manual", 1],
+    ]);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

@@ -1,6 +1,6 @@
 {
   "name": "dsh-api-hub",
-  "version": "0.8.6",
+  "version": "0.9.0",
   "description": "API Hub — manage and call local API providers (keys, models, balances) and skills from inside DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
@@ -13,7 +13,9 @@
   "bugs": {
     "url": "https://github.com/Limooning/DSH-API-Hub/issues"
   },
-  "engines": { "dsh": ">=0.2.1-rc.2 <0.3.0-0" },
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
   "scripts": {
     "test": "node --test test/smoke.test.mjs",
     "check:dsh": "node scripts/check-dsh-compat.mjs",
@@ -23,7 +25,14 @@
     "access": "public"
   },
   "icon": "assets/icon.svg",
-  "keywords": ["dsh", "dsh-plugin", "deepseek-harness", "api", "dashboard", "balance"],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "api",
+    "dashboard",
+    "balance"
+  ],
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
