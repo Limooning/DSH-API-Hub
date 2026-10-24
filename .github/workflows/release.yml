@@ -47,6 +47,7 @@ jobs:
         run: |
           gh release create "$TAG" dist/*.tgz \
             --title "$TAG" \
+            --latest \
             --generate-notes \
             --notes "Install: \`pnpm add <the .tgz asset>\` from this release, or \`pnpm add link:<repository path>\`." \
-            || gh release upload "$TAG" dist/*.tgz --clobber
+            || { gh release upload "$TAG" dist/*.tgz --clobber && gh release edit "$TAG" --latest; }
