@@ -150,7 +150,9 @@ npm run check:dsh
 
 面板的颜色全部是 CSS 变量（`--ahb-*`），浅色在 `body`、深色在 `body[data-ds-dark-theme]` 各给一份。DSH 切换主题时浏览器直接重算，不需要监听事件或重建组件。
 
-这些变量都映射到 DSH 的 `--dsw-alias-*`（`label-primary`、`bg-layer-1/2`、`border-l2/l3`、`state-success/error`…），所以面板和「插件市场」用的是同一套颜色；字面值只在宿主没提供该别名时兜底。半透明的卡片是 `color-mix(bg-layer-1 92%, transparent)` 加 `backdrop-filter`。
+这些变量都映射到 DSH 的 `--dsw-alias-*`（`label-primary`、`bg-layer-1/2`、`border-l2/l3`、`state-success/error`…），所以面板和「插件市场」用的是同一套颜色；字面值只在宿主没提供该别名时兜底。
+
+卡片是半透明的（`color-mix(bg-layer-1 92%, transparent)`），但**不叠 `backdrop-filter`**：模糊会让 Chromium 把每张卡单独合成一层，鼠标离开后那一层可能停在旧帧，看起来就是卡片外面留了一圈白边。卡片的边也不是 `border`，而是 `inset 0 0 0 1px` 的内阴影——`border` 画在背景盒外面，任何一个比预期亮的令牌、或者一个亚像素抗锯齿，都会变成描边。悬停只换底色：不改边、不改尺寸、不改位置（上浮 1px 会让指针在卡片下沿反复进出，看起来就是上下抖）。弹窗仍然带模糊，它盖在遮罩上，没有卡片的边可以出缝。
 
 ### 为什么入口在侧边栏，而不是设置页
 
