@@ -765,6 +765,11 @@ const write = (rel, body) => { const file = join(home, rel); writeFileSync(file,
 // under ~/.dsh — that is the folder a user cannot be expected to comb by hand.
 mkdir(".dsh/relay");
 mkdir(".dsh/relay/extra");
+// Two refs in DSH's store: one belongs to the panel itself (it writes APIHUB_*
+// so a route keeps its key), one is somebody else's. Only the second is an
+// endpoint a user could import, and the first has no Base URL to offer.
+write(".dsh/.credentials.yaml",
+  "version: 1\\nrefs:\\n  APIHUB_SOMETHING_API_KEY: sk-mine-00000000000001\\n  OTHER_TOOL_KEY: sk-other-000000000002\\nrecords:\\n");
 const toml = write(".dsh/relay/config.toml",
   "[api]\\nbase_url = \\"http://127.0.0.1:" + bearer.address().port + "/v1\\"  # base url\\napi_key = \\"" + bearerKey + "\\"\\n");
 // The same secret, second copy in a longer path: the scan must collapse it.
@@ -803,6 +808,7 @@ bearer.close(); xkey.close(); panel.close();
 console.log("FORMATS " + JSON.stringify({
   autoPaths: auto.map((h) => h.path),
   tomlHit: Boolean(tomlHit), xkeyHit: Boolean(xkeyHit),
+  credentialRefs: (found.body.credentials || []).map((c) => c.ref),
   imported, importedX, tested, rewrote,
   providers: state.body.providers.map((p) => ({ name: p.name, keyPresent: p.keyPresent, cachedCount: p.cachedCount })),
 }));
@@ -833,8 +839,14 @@ test("TOML and .env sources import, survive a dedupe, and remember the header st
     assert.equal(out.autoPaths.some((p) => p.endsWith("copy.json")), false,
       "the same secret in a second file is collapsed: " + JSON.stringify(out.autoPaths));
 
-    assert.equal(out.imported.code, 200, JSON.stringify(out.imported.body));
-    assert.equal(out.imported.body.provider.cachedCount, 2);
+    // The panel's own APIHUB_* refs are bookkeeping, not endpoints: offering them
+    // produced "缺 Base URL" rows nobody could act on.
+    assert.equal(out.credentialRefs.includes("OTHER_TOOL_KEY"), true,
+      "another tool's key is still offered: " + JSON.stringify(out.credentialRefs));
+    assert.equal(out.credentialRefs.some((ref) => ref.startsWith("APIHUB_")), false,
+      "the panel's own refs are not offered: " + JSON.stringify(out.credentialRefs));
+
+    assert.equal(out.imported.code, 200, JSON.stringify(out.imported.body));    assert.equal(out.imported.body.provider.cachedCount, 2);
     assert.equal(out.importedX.code, 200, JSON.stringify(out.importedX.body));
 
     // The x-api-key style is remembered on the provider and used by real calls.
