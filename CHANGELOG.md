@@ -3,6 +3,18 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.8.5
+
+**目标：模型列表里不再出现两个 DeepSeek。**
+
+设置 → 模型里的「DeepSeek」是 DSH 自带的 provider（`deepseek-official`），它和面板的「DeepSeek 官方」原本读同一把 Key —— 面板把 `DEEPSEEK_API_KEY` 直接借给了自己的路由，于是两个入口列出同一批模型。
+
+- 面板路由改用自己名下的 ref：`APIHUB_DEEPSEEK_API_KEY`（其他接口同理，`APIHUB_<名字>_API_KEY`）
+- 同步时把这把 Key 复制到新 ref；**原来的 `DEEPSEEK_API_KEY` 一个字节都不动**，DSH 自带 provider 和联网搜索照常工作
+- 自带 DeepSeek 因此变成「未配置」，不再往模型选择器里塞模型；默认模型本来就指向 `deepseek-account`（已登录的账号），不受影响
+- DSH 没有凭据服务时无法新建 ref，此时路由继续借用原始 ref（否则每次调用都会缺 Key）
+- 测试补上：路由的 `apiKeyEnv` 必须是独立 ref、Key 编辑仍走原始 ref、同步会把值复制到新 ref
+
 ## 0.8.4
 
 **目标：面板里的文本模型，就是 DSH 模型列表里的那一份。**

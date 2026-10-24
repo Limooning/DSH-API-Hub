@@ -268,7 +268,11 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.healthAfterAttach, true);
     assert.equal(out.healthAfterDetach, false);
     assert.equal(out.keyViaService.code, 200);
-    assert.deepEqual(out.credCalls, [{ op: "set", ref: "DEEPSEEK_API_KEY", value: "sk-through-service-111111" }]);
+    // The key edit goes to the store it came from; the sync then copies the same
+    // secret to the route's own reference, because sharing DEEPSEEK_API_KEY made
+    // DSH's built-in provider and this route list the same models.
+    assert.deepEqual(out.credCalls[0], { op: "set", ref: "DEEPSEEK_API_KEY", value: "sk-through-service-111111" });
+    assert.ok(out.credCalls.slice(1).every((call) => call.ref === "APIHUB_DEEPSEEK_API_KEY"));
 
     // A chat endpoint becomes one DSH route: the adapter speaks the OpenAI chat
     // protocol, the key is a credential ref, and the model list is what the panel
@@ -278,13 +282,16 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.planAfterAttach.settings, true);
     assert.equal(out.planAfterAttach.routes.length, 1);
     assert.equal(out.planAfterAttach.routes[0].id, "deepseek-api");
-    assert.equal(out.planAfterAttach.routes[0].ref, "DEEPSEEK_API_KEY");
+    // The route gets a reference of its own: DSH's built-in DeepSeek provider
+    // reads DEEPSEEK_API_KEY, so borrowing it made both routes show one key's
+    // models.
+    assert.equal(out.planAfterAttach.routes[0].ref, "APIHUB_DEEPSEEK_API_KEY");
     assert.deepEqual(out.planAfterAttach.routes[0].models, ["deepseek-flash"]);
     assert.equal(out.sync.code, 200);
     assert.equal(JSON.parse(out.sync.body).routes, 1);
     const written = out.settingsCalls[0].providers;
     assert.equal(written["deepseek-api"].api, "openai-completions");
-    assert.equal(written["deepseek-api"].apiKeyEnv, "DEEPSEEK_API_KEY");
+    assert.equal(written["deepseek-api"].apiKeyEnv, "APIHUB_DEEPSEEK_API_KEY");
     assert.equal(written["deepseek-api"].baseURL, "https://api.deepseek.com");
     assert.deepEqual(written["deepseek-api"].models, [{ id: "deepseek-flash" }]);
     assert.ok(written.keepme, "an unrelated route in the same section must survive");
