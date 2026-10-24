@@ -18,7 +18,10 @@ node --check lib/index.js
 node --check lib/client.js
 npm test
 
-# 2) 打包内容（确认 test/、docs/ 没被打进去）
+# 2) 声明的 DSH 范围还覆盖最新版吗（这一条失败就先手工装新版试）
+npm run check:dsh
+
+# 3) 打包内容（确认 test/、docs/ 没被打进去）
 npm pack --dry-run
 ```
 

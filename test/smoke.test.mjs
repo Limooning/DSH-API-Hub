@@ -201,6 +201,16 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out["/api/health"].code, 200);
     assert.equal(JSON.parse(out["/api/health"].body).ok, true);
 
+    // The panel reports both versions in play: DSH's own `engines.dsh` check
+    // refuses an install it does not satisfy, so the page must be able to say
+    // the same thing before the user hits the failure.
+    const health = JSON.parse(out["/api/health"].body);
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    assert.equal(health.plugin.version, manifest.version);
+    assert.equal(health.dsh.requires, manifest.engines.dsh);
+    assert.equal(typeof health.dsh.version === "string" || health.dsh.version === null, true);
+    assert.equal([true, false, null].includes(health.dsh.compatible), true);
+
     assert.equal(out["/api/state"].code, 200);
     const state = JSON.parse(out["/api/state"].body);
     assert.equal(state.providers.length, 1, "the example registry ships one provider");
@@ -834,4 +844,25 @@ test("saving a model selection cannot wipe it by omission", () => {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+// The range DSH enforces at install time is parsed by this package too, so the
+// page can warn before a user upgrades into a plugin that will not load.
+test("the declared DSH range reads the same way DSH reads it", async () => {
+  const { satisfiesRange } = await import(SERVER_URL);
+  const range = ">=0.2.1-rc.2 <0.3.0-0";
+  assert.equal(satisfiesRange("0.2.1-rc.1", range), false);
+  assert.equal(satisfiesRange("0.2.1-rc.2", range), true);
+  assert.equal(satisfiesRange("0.2.9-rc.1", range), true);
+  assert.equal(satisfiesRange("0.3.0-rc.1", range), false);
+  assert.equal(satisfiesRange("0.3.0", range), false);
+  assert.equal(satisfiesRange("0.1.9", range), false);
+  // Caret keeps the leftmost non-zero part; tilde keeps major and minor.
+  assert.equal(satisfiesRange("0.3.0", "^0.2.1"), false);
+  assert.equal(satisfiesRange("0.2.5", "^0.2.1"), true);
+  assert.equal(satisfiesRange("1.5.0", "^1.2.0"), true);
+  assert.equal(satisfiesRange("0.2.5", "~0.2.1"), true);
+  assert.equal(satisfiesRange("0.3.1", "~0.2.1"), false);
+  // Anything that is not a version must not be reported as a mismatch.
+  assert.equal(satisfiesRange("garbage", range), null);
+  assert.equal(satisfiesRange("0.2.1-rc.2", "not a range"), null);
 });

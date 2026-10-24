@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # A new DSH can land any day of the week; ask once a week whether the range
+  # this plugin declares still covers it.
+  schedule:
+    - cron: "0 3 * * 1"
 
 jobs:
   test:
@@ -32,3 +36,25 @@ jobs:
 
       - name: Package contents
         run: npm pack --dry-run
+
+  dsh-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # DSH refuses an install whose `engines.dsh` it does not satisfy, so a new
+      # DSH release can silently make this plugin uninstallable. This fails the
+      # build instead, while the fix is still cheap: try the plugin against the
+      # new build, widen the range, release.
+      - name: engines.dsh still covers the newest DSH
+        run: npm run check:dsh
+
+      # The same facts the panel reads, written out for the run summary.
+      - name: Report the range
+        if: always()
+        run: |
+          node -e "const m=require('./package.json');console.log('plugin',m.version,'requires dsh',m.engines?.dsh)"

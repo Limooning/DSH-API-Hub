@@ -175,6 +175,27 @@ DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律�
 
 ## 版本与更新
 
+### 和 DSH 本体的兼容范围
+
+`package.json` 里声明了 `engines.dsh`：
+
+```json
+"engines": { "dsh": ">=0.2.1-rc.2 <0.3.0-0" }
+```
+
+DSH 安装插件时会拿它和运行时版本比对，不满足就直接拒绝安装（`incompatible-version`），不会先装进去再出问题。所以这个范围写保守一点：只在真的对着新版试过之后放宽。
+
+面板页头右上角会显示 `DSH 0.2.1-rc.2 · v0.7.8`，鼠标悬停能看到插件声明的范围；真的对不上时，页头下面会出一条红字说明，而不是让接口悄悄调不通。数据来自 `/api/health` 的 `plugin` 与 `dsh` 两个字段（`dsh.version` 为 `null` 表示当前环境读不到版本，此时不报警）。
+
+发布前、以及每周一 CI 都会跑一次：
+
+```powershell
+npm run check:dsh
+# ok: @deepseek-ai/dsh@0.2.1-rc.2 satisfies engines.dsh ">=0.2.1-rc.2 <0.3.0-0" (plugin 0.7.8)
+```
+
+它去 registry 取 `@deepseek-ai/dsh` 的 `latest`，用和 DSH 同一套规则比对：落在范围外就以非零退出码失败（提示先手工装新版试一遍再放宽范围），网络不通只警告不判红。
+
 版本号只写在 `package.json` 与 [`CHANGELOG.md`](CHANGELOG.md) 里，README 不单独记一份——上面的 npm 徽章和 [Releases](https://github.com/Limooning/DSH-API-Hub/releases) 页会自动跟着走，省得改漏。每个版本都打 tag，`git tag -n` 可以看到全部；推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
 
 ```powershell
