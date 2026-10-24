@@ -5,6 +5,7 @@ backups/
 scan-sources.json
 skill-tags.json
 skill-order.json
+dsh-routes.json
 *.bak
 *.bak-*
 

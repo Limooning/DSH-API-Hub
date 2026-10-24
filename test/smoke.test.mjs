@@ -109,6 +109,32 @@ out.settingsCalls = settingsCalls;
 useSettingsService(null);
 useCredentialService(null);
 
+// Nobody presses a button for this any more: the page compares the section with
+// the registry and writes only on drift, so the two lists cannot disagree. The
+// panel owns exactly the ids it wrote — a hand-registered route survives, one
+// whose provider got disabled leaves, and an unchanged section stays quiet.
+let section = { providers: { keepme: { displayName: "keep", api: "openai-completions", baseURL: "https://keep/v1", apiKeyEnv: "KEEP_KEY", models: [{ id: "keep-1" }] } } };
+const pageCalls = [];
+const fakePage = {
+  read: () => ({ providers: section.providers }),
+  update: (patch) => { pageCalls.push(patch); section = { providers: patch.providers }; return Promise.resolve(); },
+};
+useCredentialService(fakeService);
+useSettingsService(fakePage);
+out.planDrifted = JSON.parse((await call("/api/dsh/plan")).body);
+out.syncDrifted = await post("/api/dsh/sync", {});
+out.planClean = JSON.parse((await call("/api/dsh/plan")).body);
+out.ownedFile = readFileSync(join(home, ".dsh", "api-hub", "dsh-routes.json"), "utf8");
+out.sectionAfterSync = Object.keys(section.providers);
+out.disabled = await post("/api/enabled", { id: "deepseek-api", enabled: false });
+out.planStale = JSON.parse((await call("/api/dsh/plan")).body);
+out.syncEmpty = await post("/api/dsh/sync", {});
+out.sectionAfterPrune = Object.keys(section.providers);
+out.planAfterPrune = JSON.parse((await call("/api/dsh/plan")).body);
+out.reenabled = await post("/api/enabled", { id: "deepseek-api", enabled: true });
+useSettingsService(null);
+useCredentialService(null);
+
 out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 
@@ -255,6 +281,24 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.match(out.credsFileAfterServiceWrite, /DEEPSEEK_API_KEY: sk-old-value-000000/);
     assert.equal(out.keyViaFile.code, 200);
     assert.match(out.credsFileAfterFileWrite, /DEEPSEEK_API_KEY: sk-through-file-222222/);
+
+    // Drift detection is what the page uses instead of a button: fresh section →
+    // drift, after a sync → clean, then a disabled provider → drift again with the
+    // vanished id marked stale so the next sync can drop it. Routes the panel did
+    // not write are never touched.
+    assert.equal(out.planDrifted.drift, true);
+    assert.equal(out.syncDrifted.code, 200);
+    assert.equal(out.planClean.drift, false);
+    assert.deepEqual(JSON.parse(out.ownedFile).ids, ["deepseek-api"]);
+    assert.deepEqual(out.sectionAfterSync.sort(), ["deepseek-api", "keepme"]);
+    assert.equal(out.planStale.drift, true);
+    assert.deepEqual(out.planStale.stale, ["deepseek-api"]);
+    assert.equal(out.syncEmpty.code, 200);
+    assert.equal(JSON.parse(out.syncEmpty.body).routes, 0);
+    assert.deepEqual(JSON.parse(out.syncEmpty.body).pruned, ["deepseek-api"]);
+    assert.deepEqual(out.sectionAfterPrune, ["keepme"]);
+    assert.equal(out.planAfterPrune.drift, false);
+    assert.equal(out.reenabled.code, 200);
 
     // The list follows DSH's own roots: the project workspace, ~/.agents (a
     // folder plus a bare .md) and the differences between them.
