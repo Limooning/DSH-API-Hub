@@ -3,6 +3,18 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.10.1
+
+**目标：面板和「插件市场」看起来是同一套颜色，而不是各画各的黑。**
+
+- 每个 `--ahb-*` 令牌都改成 DSH 自己的别名（`--dsw-alias-label-primary`、`--dsw-alias-bg-layer-1`、`--dsw-alias-border-l2`、`--dsw-alias-state-success-primary` …），字面值只在宿主没提供该别名时兜底
+- 卡片底色、边框、标签灰、成功 / 失败色一次性对齐：市场的卡片是 `--dsw-alias-bg-layer-1` + 1px `--dsw-alias-border-l2` + 12px 圆角，面板现在是同一组值
+- 半透明保留：卡片仍是 `color-mix(bg-layer-1 92%, transparent)` + `backdrop-filter`，只是底下那层黑换成了主题自己的黑
+- 深浅两套各 54 个令牌一一对照；补上 `--ahb-hover-filter`（之前 CSS 里引用过但它没定义）
+- 开关（启用 / 停用）改成实心：轨道直接用 `state-success-primary`，旋钮纯白；原来的 26% 透明绿看起来发灰。状态小圆点另开 `--ahb-dot-ring`，保留一圈很淡的光晕
+- 修：点一下开关再把鼠标移开，卡片会残留一圈白边。原因是按下落在开关上时卡片仍被当成拖动源，一拖动就给落点画边；现在按在按钮 / 输入框 / 开关上的按下不会起拖，落点标记也换成独立的 `--ahb-drop`（品牌色），`dragend` / `drop` 还会在窗口级兜底清状态
+- 新增渲染冒烟测试（`test/render.test.mjs`）：用假 React 把面板导出组件都渲染一遍，客户端写崩会先在 `npm test` 里报出来，而不是让设置页直接变白
+
 ## 0.10.0
 
 **目标：把手上已有的模型配置直接搬进来，而不是一条条手填。**

@@ -151,6 +151,8 @@ npm run check:dsh
 
 面板的颜色全部是 CSS 变量（`--ahb-*`），浅色在 `body`、深色在 `body[data-ds-dark-theme]` 各给一份。DSH 切换主题时浏览器直接重算，不需要监听事件或重建组件。
 
+这些变量都映射到 DSH 的 `--dsw-alias-*`（`label-primary`、`bg-layer-1/2`、`border-l2/l3`、`state-success/error`…），所以面板和「插件市场」用的是同一套颜色；字面值只在宿主没提供该别名时兜底。半透明的卡片是 `color-mix(bg-layer-1 92%, transparent)` 加 `backdrop-filter`。
+
 ### 为什么入口在侧边栏，而不是设置页
 
 DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律回退成齿轮，且 `settings.section` 没有 `icon` 字段；而 `sidebar.panellist` 的第二个参数就是图标组件。所以本插件只注册侧边栏席位，不在设置页留一个重复条目。上游需求整理在 [`docs/upstream/settings-section-icon.md`](docs/upstream/settings-section-icon.md)。
