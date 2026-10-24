@@ -3,6 +3,15 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.7.6
+
+**目标：README 不再自带一份版本号。**
+
+- 删掉 README「版本与更新」里的 `当前版本：v0.6.1`（那行已经落后 9 个版本）：版本位交给 npm 徽章与 Releases 页，自动跟着走
+- tarball 示例改成 `dsh-api-hub-<版本>.tgz`，不再写死文件名
+- `npm test` 新增一条用例：README 里出现写死的版本号就失败，发布前挡住这种漂移
+- `docs/publish.md` 的「升版本」清单从三处改成两处（`package.json` + `CHANGELOG.md`），并说明 README 不参与
+
 ## 0.7.5
 
 **目标：面板上写的就是 DSH 真能调到的，不用再点一次按钮。**

@@ -40,11 +40,12 @@ LICENSE          package.json      README.md
 | 加功能、不破坏兼容 | minor（0.5.0） |
 | 目录结构、安装方式、配置格式变更 | major（1.0.0） |
 
-同时更新三处：
+同时更新两处：
 
 1. `package.json` 的 `version`
-2. `README.md` 的「当前版本」和 tarball 文件名示例
-3. `CHANGELOG.md` 顶部加一节
+2. `CHANGELOG.md` 顶部加一节
+
+README 里**不写死版本号**：版本位的显示交给 npm 徽章和 Releases 页，tarball 示例写成 `dsh-api-hub-<版本>.tgz`。`npm test` 里有一条用例会扫 README，发现写死的版本号就报错。
 
 ## 3. 发布到 npm
 

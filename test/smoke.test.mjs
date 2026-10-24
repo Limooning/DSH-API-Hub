@@ -734,3 +734,13 @@ test("the host half hands the credential service to the backend", async () => {
   assert.equal(res.code, 200);
   assert.equal(JSON.parse(res.body).credentials, true);
 });
+
+// The README used to carry its own copy of the version, so every release left it
+// one behind (it still said 0.6.1 when the package was at 0.7.5). The version now
+// lives in package.json and CHANGELOG.md only; this keeps it that way.
+test("the README does not pin a version of its own", () => {
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const pinned = [...readme.matchAll(/(?:dsh-api-hub-|当前版本[：:]\s*\*{0,2}v?)(\d+\.\d+\.\d+)/g)]
+    .map((match) => match[0].replace(/\s+/g, " "));
+  assert.deepEqual(pinned, [], "README 里写死了版本号，发布时会忘记改：" + pinned.join("、"));
+});
