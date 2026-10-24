@@ -8,7 +8,7 @@
 
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里的**本机 API 与技能管理台**：把散落在各个配置文件里的 API 服务商收进一个面板——看余额、改 Key、选模型、测连通、发调试请求；顺便管理 `~/.dsh/skills` 下的技能。
 
-界面是 DSH 侧边栏里的**原生 React 面板**，后端逻辑跑在 **DSH 进程内**、挂在 DSH 自己的 HTTP 服务 `/api-hub` 路由下：不额外开端口、不启子进程、不加载任何网页。
+界面是 DSH 侧边栏里的**原生 React 面板**，后端逻辑跑在 **DSH 进程内**、挂在 DSH 自己的 HTTP 服务 `/api-hub` 路由下：不额外开端口、不启子进程、不加载任何网页。面板颜色全部来自 CSS 变量（浅色 / 深色各一份），跟着 DSH 的主题设置一起切换。
 
 ![API Hub 面板](docs/screenshot.png)
 
