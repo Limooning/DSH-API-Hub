@@ -957,7 +957,7 @@ import { handleRequest, useSettingsService } from ${JSON.stringify(SERVER_URL)};
 
 const home = process.env.USERPROFILE || process.env.HOME;
 mkdirSync(join(home, ".dsh", "api-hub"), { recursive: true });
-writeFileSync(join(home, ".dsh", ".credentials.yaml"), "version: 1\\nrefs:\\n  FAKE_KEY: sk-fake-0000000000000001\\nrecords:\\n", "utf8");
+writeFileSync(join(home, ".dsh", ".credentials.yaml"), "version: 1\\nrefs:\\n  DEEPSEEK_API_KEY: sk-deepseek-000000000001\\n  FAKE_KEY: sk-fake-0000000000000001\\nrecords:\\n", "utf8");
 
 // An upstream that lists its models in the wrong order on purpose, and records
 // the model of every chat call, so the probe can see which one was used.
@@ -1058,9 +1058,12 @@ useSettingsService({
   read: () => null,
   update: () => Promise.resolve(),
   sections: () => [
-    { ns: "llm-deepseek", value: { apiKey: "••••••••" } },
+    // Real DSH never puts the key in this section: it names the reference and
+    // the credential service resolves it. The flag has to mean "resolves",
+    // not "the section happens to carry a secret".
+    { ns: "llm-deepseek", value: {} },
     { ns: "llm-pi-ai", value: { providers: {
-      "fake-relay": { displayName: "假中转", baseURL: "https://example.invalid", api: "openai-completions", apiKeyEnv: "FAKE_KEY", models: [{ id: "m2" }, { id: "m3" }] },
+      "fake-relay": { displayName: "假中转", baseURL: "https://example.invalid", api: "openai-completions", apiKeyEnv: "DEEPSEEK_API_KEY", models: [{ id: "m2" }, { id: "m3" }] },
       "by-hand": { displayName: "手加的回转", baseURL: "https://relay.invalid", api: "openai-completions", apiKeyEnv: "OTHER_KEY", models: [{ id: "x" }] },
     } } },
   ],
@@ -1071,6 +1074,7 @@ const mirror = {
   offOk: mirrorOff.ok,
   offReason: Boolean(mirrorOff.reason),
   rows: (mirrorOn.rows || []).map((row) => [row.name, row.origin, row.modelsCount]),
+  configured: (mirrorOn.rows || []).map((row) => [row.name, row.configured]),
 };
 
 const ordered = {
@@ -1143,6 +1147,11 @@ test("saving a model selection cannot wipe it by omission", () => {
     // and a host that offers `sections` gets every row with its owner labelled.
     assert.equal(out.mirror.offOk, false);
     assert.equal(out.mirror.offReason, true);
+    assert.deepEqual(out.mirror.configured, [
+      ["DeepSeek", true],
+      ["假中转", true],
+      ["手加的回转", false],
+    ]);
     assert.deepEqual(out.mirror.rows, [
       ["DeepSeek", "builtin", 0],
       ["假中转", "panel", 2],
