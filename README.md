@@ -110,6 +110,7 @@ dsh plugin --profile desktop remove dsh-api-hub
 - 只接你勾选过的对话模型；图片 / 视频 / 语音 / 向量按名字分类后排除
 - Key 通过 DSH 凭据服务落成 ref，不落到配置文件里；值已经一致就不重写
 - 接口的 Key 会**复制到自己名下的 ref**（`APIHUB_<名字>_API_KEY`），不再借用 `DEEPSEEK_API_KEY` 这类原始 ref —— 否则 DSH 自带的 DeepSeek provider 会读到同一把 Key，两个入口列出一模一样的模型；原始 ref 保持原样，自带 provider 和联网搜索不受影响
+- 端点就是 **DSH 自带 provider 那个**的接口（如 `api.deepseek.com`）不注册路由：面板只把 Key 写进它读的 ref，模型列表由 DSH 自己给，所以「设置 → 模型」里那一行既是 DSH 自带的、也是面板在管的，不会变成两行
 
 ### 兼容范围
 

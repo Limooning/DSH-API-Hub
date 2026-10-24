@@ -90,14 +90,42 @@ out.healthAfterDetach = JSON.parse((await call("/api/health")).body).credentials
 out.keyViaFile = await post("/api/key", { id: "deepseek-api", key: "sk-through-file-222222" });
 out.credsFileAfterFileWrite = readFileSync(credsFile, "utf8");
 
+// A second chat endpoint on a host DSH does not ship itself, so the route
+// assertions have something that really becomes a route: the seeded DeepSeek
+// provider now resolves to DSH's built-in one and must not add a second row.
+out.addRelay = await post("/api/providers/add", {
+  name: "Relay",
+  baseURL: "https://relay.example/v1",
+  key: "sk-relay-333333",
+  models: ["relay-large"],
+  selected: ["relay-large"],
+});
+
 // The panel can also hand these endpoints to DSH itself: every chat endpoint
 // becomes a llm-pi-ai route, so the models show up in DSH's own picker. The
 // settings section is written through the settings service; without one the
 // routes stay untouched and the panel says so.
 const settingsCalls = [];
+const settingsRemovals = [];
 const fakeSettings = {
-  read: () => ({ providers: { keepme: { displayName: "keep" } } }),
+  // Includes the route an older version of the panel wrote for DeepSeek, so the
+  // retirement path has something real to remove.
+  read: () => ({
+    providers: {
+      keepme: { displayName: "keep" },
+      "deepseek-api": {
+        displayName: "DeepSeek 官方",
+        baseURL: "https://api.deepseek.com",
+        api: "openai-completions",
+        apiKeyEnv: "APIHUB_DEEPSEEK_API_KEY",
+        models: [{ id: "deepseek-flash" }],
+      },
+    },
+  }),
+  // Mirrors DSH: update merges a layer, so leaving a key out cannot delete it;
+  // only the unset op removes one.
   update: (patch) => { settingsCalls.push(patch); return Promise.resolve(); },
+  remove: (ids) => { settingsRemovals.push(ids); return Promise.resolve(); },
 };
 out.planBeforeAttach = JSON.parse((await call("/api/dsh/plan")).body);
 out.syncNoService = await post("/api/dsh/sync", {});
@@ -106,6 +134,7 @@ useSettingsService(fakeSettings);
 out.planAfterAttach = JSON.parse((await call("/api/dsh/plan")).body);
 out.sync = await post("/api/dsh/sync", {});
 out.settingsCalls = settingsCalls;
+out.settingsRemovals = settingsRemovals;
 useSettingsService(null);
 useCredentialService(null);
 
@@ -115,9 +144,15 @@ useCredentialService(null);
 // whose provider got disabled leaves, and an unchanged section stays quiet.
 let section = { providers: { keepme: { displayName: "keep", api: "openai-completions", baseURL: "https://keep/v1", apiKeyEnv: "KEEP_KEY", models: [{ id: "keep-1" }] } } };
 const pageCalls = [];
+const pageRemovals = [];
 const fakePage = {
   read: () => ({ providers: section.providers }),
-  update: (patch) => { pageCalls.push(patch); section = { providers: patch.providers }; return Promise.resolve(); },
+  update: (patch) => { pageCalls.push(patch); section = { providers: { ...section.providers, ...patch.providers } }; return Promise.resolve(); },
+  remove: (ids) => {
+    pageRemovals.push(ids);
+    for (const id of ids) delete section.providers[id];
+    return Promise.resolve();
+  },
 };
 useCredentialService(fakeService);
 useSettingsService(fakePage);
@@ -126,12 +161,13 @@ out.syncDrifted = await post("/api/dsh/sync", {});
 out.planClean = JSON.parse((await call("/api/dsh/plan")).body);
 out.ownedFile = readFileSync(join(home, ".dsh", "api-hub", "dsh-routes.json"), "utf8");
 out.sectionAfterSync = Object.keys(section.providers);
-out.disabled = await post("/api/enabled", { id: "deepseek-api", enabled: false });
+out.pageRemovals = pageRemovals;
+out.disabled = await post("/api/enabled", { id: "relay", enabled: false });
 out.planStale = JSON.parse((await call("/api/dsh/plan")).body);
 out.syncEmpty = await post("/api/dsh/sync", {});
 out.sectionAfterPrune = Object.keys(section.providers);
 out.planAfterPrune = JSON.parse((await call("/api/dsh/plan")).body);
-out.reenabled = await post("/api/enabled", { id: "deepseek-api", enabled: true });
+out.reenabled = await post("/api/enabled", { id: "relay", enabled: true });
 useSettingsService(null);
 useCredentialService(null);
 
@@ -268,33 +304,41 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.healthAfterAttach, true);
     assert.equal(out.healthAfterDetach, false);
     assert.equal(out.keyViaService.code, 200);
-    // The key edit goes to the store it came from; the sync then copies the same
-    // secret to the route's own reference, because sharing DEEPSEEK_API_KEY made
-    // DSH's built-in provider and this route list the same models.
+    // The key edit goes to the store it came from. No route borrows
+    // DEEPSEEK_API_KEY any more, so the only writes after it belong to the relay
+    // route, under a reference of its own.
     assert.deepEqual(out.credCalls[0], { op: "set", ref: "DEEPSEEK_API_KEY", value: "sk-through-service-111111" });
-    assert.ok(out.credCalls.slice(1).every((call) => call.ref === "APIHUB_DEEPSEEK_API_KEY"));
+    assert.ok(out.credCalls.slice(1).every((call) => call.ref === "APIHUB_RELAY_API_KEY"), JSON.stringify(out.credCalls));
 
-    // A chat endpoint becomes one DSH route: the adapter speaks the OpenAI chat
-    // protocol, the key is a credential ref, and the model list is what the panel
-    // last probed. Existing routes in that section are left alone.
+    // A chat endpoint DSH does not ship becomes one route: the adapter speaks the
+    // OpenAI chat protocol, the key is a credential ref, and the model list is
+    // what the panel last probed. Existing routes in that section are left alone.
     assert.equal(out.planBeforeAttach.settings, false);
     assert.equal(out.syncNoService.code, 501);
     assert.equal(out.planAfterAttach.settings, true);
     assert.equal(out.planAfterAttach.routes.length, 1);
-    assert.equal(out.planAfterAttach.routes[0].id, "deepseek-api");
-    // The route gets a reference of its own: DSH's built-in DeepSeek provider
-    // reads DEEPSEEK_API_KEY, so borrowing it made both routes show one key's
-    // models.
-    assert.equal(out.planAfterAttach.routes[0].ref, "APIHUB_DEEPSEEK_API_KEY");
-    assert.deepEqual(out.planAfterAttach.routes[0].models, ["deepseek-flash"]);
+    assert.equal(out.planAfterAttach.routes[0].id, "relay");
+    assert.equal(out.planAfterAttach.routes[0].ref, "APIHUB_RELAY_API_KEY");
+    assert.deepEqual(out.planAfterAttach.routes[0].models, ["relay-large"]);
+    // DeepSeek's endpoint is DSH's own provider: it is listed as covered instead
+    // of being duplicated as a route.
+    assert.equal(out.planAfterAttach.builtin.length, 1);
+    assert.equal(out.planAfterAttach.builtin[0].id, "deepseek-api");
+    assert.equal(out.planAfterAttach.builtin[0].provider, "deepseek-official");
+    assert.equal(out.planAfterAttach.builtin[0].ref, "DEEPSEEK_API_KEY");
+    // The route the panel wrote for DeepSeek before this change is retired: an
+    // explicit unset, because `update` alone cannot drop a key from the layer.
+    assert.deepEqual(out.settingsRemovals, [["deepseek-api"]]);
     assert.equal(out.sync.code, 200);
     assert.equal(JSON.parse(out.sync.body).routes, 1);
     const written = out.settingsCalls[0].providers;
-    assert.equal(written["deepseek-api"].api, "openai-completions");
-    assert.equal(written["deepseek-api"].apiKeyEnv, "APIHUB_DEEPSEEK_API_KEY");
-    assert.equal(written["deepseek-api"].baseURL, "https://api.deepseek.com");
-    assert.deepEqual(written["deepseek-api"].models, [{ id: "deepseek-flash" }]);
-    assert.ok(written.keepme, "an unrelated route in the same section must survive");
+    assert.equal(written.relay.api, "openai-completions");
+    assert.equal(written.relay.apiKeyEnv, "APIHUB_RELAY_API_KEY");
+    assert.equal(written.relay.baseURL, "https://relay.example/v1");
+    assert.deepEqual(written.relay.models, [{ id: "relay-large" }]);
+    assert.equal(written["deepseek-api"], undefined, "the built-in DeepSeek must not be duplicated as a route");
+    // Routes the panel does not own stay where they are: the service merges this
+    // patch into the existing layer, so `keepme` survives without being named.
     assert.match(out.credsFileAfterServiceWrite, /DEEPSEEK_API_KEY: sk-old-value-000000/);
     assert.equal(out.keyViaFile.code, 200);
     assert.match(out.credsFileAfterFileWrite, /DEEPSEEK_API_KEY: sk-through-file-222222/);
@@ -306,13 +350,13 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.planDrifted.drift, true);
     assert.equal(out.syncDrifted.code, 200);
     assert.equal(out.planClean.drift, false);
-    assert.deepEqual(JSON.parse(out.ownedFile).ids, ["deepseek-api"]);
-    assert.deepEqual(out.sectionAfterSync.sort(), ["deepseek-api", "keepme"]);
+    assert.deepEqual(JSON.parse(out.ownedFile).ids, ["relay"]);
+    assert.deepEqual(out.sectionAfterSync.sort(), ["keepme", "relay"]);
     assert.equal(out.planStale.drift, true);
-    assert.deepEqual(out.planStale.stale, ["deepseek-api"]);
+    assert.deepEqual(out.planStale.stale, ["relay"]);
     assert.equal(out.syncEmpty.code, 200);
     assert.equal(JSON.parse(out.syncEmpty.body).routes, 0);
-    assert.deepEqual(JSON.parse(out.syncEmpty.body).pruned, ["deepseek-api"]);
+    assert.deepEqual(JSON.parse(out.syncEmpty.body).pruned, ["relay"]);
     assert.deepEqual(out.sectionAfterPrune, ["keepme"]);
     assert.equal(out.planAfterPrune.drift, false);
     assert.equal(out.reenabled.code, 200);
@@ -349,8 +393,13 @@ test("the seeded registry is a copy of the bundled example", () => {
   try {
     const seeded = JSON.parse(readFileSync(join(home, ".dsh", "api-hub", "providers.json"), "utf8"));
     const example = JSON.parse(readFileSync(new URL("../providers.example.json", import.meta.url), "utf8"));
-    assert.deepEqual(seeded.providers.map((p) => p.id), example.providers.map((p) => p.id));
-    assert.equal(seeded.providers.length, 1);
+    // The probe registers one more endpoint of its own, so the seed is the
+    // prefix of the file rather than the whole of it.
+    assert.deepEqual(
+      seeded.providers.map((p) => p.id).slice(0, example.providers.length),
+      example.providers.map((p) => p.id),
+    );
+    assert.equal(example.providers.length, 1);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

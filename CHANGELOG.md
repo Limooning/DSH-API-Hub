@@ -3,6 +3,17 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.8.6
+
+**目标：一个端点只占一行——该用 DSH 自带那个，就别再建一条。**
+
+DSH 自己就注册了 DeepSeek（deepseek-official，读 DEEPSEEK_API_KEY）。以前面板还会把同一个端点再注册成一条自己的路由，于是模型列表里并排出现两个 DeepSeek。现在：
+
+- 端点命中 DSH 自带 provider 的面板接口，不再注册路由，只把 Key 写进那个 provider 读的 ref；面板管 Key，DSH 管模型，所以那一行既不掉、也不重
+- 同步时会清掉面板以前为同一端点建过的路由，DeepSeek 官方 这一行随之消失，DSH 自带的 DeepSeek 恢复成已配置
+- /api/dsh/plan 新增 uiltin 列表（谁承载了哪个接口），面板卡片上显示 DSH 内置 小标签，悬停说明 Key 与模型分别归谁
+- 其它接口照旧各建一条路由，凭据 ref 仍然互不共用
+
 ## 0.8.5
 
 **目标：模型列表里不再出现两个 DeepSeek。**
