@@ -3,6 +3,17 @@
 本文件记录用户可见的变更。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 每个版本都打了 tag，可用 `git show v0.4.0` 查看当时的完整代码。
 
+## 0.8.3
+
+**目标：接口或技能一多，面板要能往下滚。**
+
+以前面板根节点只是个 Fragment，列表区的 `flex: 1` 没有父级 flex 列可用，`overflow: auto` 就失去了高度上限 —— 内容一多直接被裁掉，滚不动。
+
+- 面板根节点改成 `display: flex; flex-direction: column; height: 100%; min-height: 0`：页头和标签页固定，只有下面的列表滚动
+- 列表区补齐 `flex: 1 1 auto` + `min-height: 0` + `overflow-y: auto`，并加 `overscroll-behavior: contain`（滚到底不带着整页一起滚）与 `scrollbar-gutter: stable`（滚动条出现时卡片不跳位）
+- 设置页外层同样改成定高 flex 列，滚动条沿用面板自己的 `.ahscroll` 细样式，跟随明暗主题
+- 兜底 `max-height: calc(100vh - 208px)`：即使插槽给的是自动高度，列表也能在窗口内滚动，而不是被裁掉
+
 ## 0.8.2
 
 **目标：谁取「第一个模型」，取的都必须是你在面板里选定的那个默认模型。**
