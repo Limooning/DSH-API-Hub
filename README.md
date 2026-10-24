@@ -40,7 +40,9 @@
 
 **技能页**
 
-- 列出 `~/.dsh/skills` 下所有技能（含已停用的）
+- 列出 **DSH 会加载的全部技能**：`~/.dsh/skills`、`~/.agents/skills`，以及已打开项目里的 `.dsh/skills` / `.agents/skills`（读 `$DSH_HOME` / `$DSH_AGENTS_HOME`，同一 id 以优先级高的根为准，和 DSH 一致）
+- **只读范围**：项目里和 `~/.agents` 里的技能带「只读」标记，面板不启停、不删除它们，只移动 `~/.dsh/skills` 里的文件
+- **名字不合规会提示**：DSH 只加载 `^[a-z0-9]+(-[a-z0-9]+)*$` 的 `name:`，不符合的卡片会标出来
 - **拖动排序**：直接拖卡片，顺序存在 `~/.dsh/api-hub/skill-order.json`；新技能排在已排序的后面
 - **双击技能名改名**：只改 `SKILL.md` 顶部的 `name:`，描述和正文原样保留，行尾跟随文件（CRLF/LF）
 - **打标签分类**：「标签」里可以新建或勾选已有标签（最多 12 个），存在 `~/.dsh/api-hub/skill-tags.json`，不动技能目录

@@ -70,6 +70,24 @@ out.skillReorderBadType = await post("/api/skills/reorder", { order: "nope" });
 out.skillReorderEmpty = await post("/api/skills/reorder", { order: [] });
 out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
+
+// The roots DSH itself walks: a project workspace, the shared ~/.agents folder,
+// a bare single-file skill, and a name DSH would refuse to load.
+const agents = join(home, ".agents", "skills");
+mkdirSync(join(agents, "agents-demo"), { recursive: true });
+writeFileSync(join(agents, "agents-demo", "SKILL.md"), "---\\nname: agents-demo\\ndescription: 共享技能\\n---\\n\\n正文\\n", "utf8");
+writeFileSync(join(agents, "lone-skill.md"), "---\\nname: lone-skill\\ndescription: 单文件技能\\n---\\n\\n正文\\n", "utf8");
+const project = join(home, "proj");
+mkdirSync(join(project, ".git"), { recursive: true });
+mkdirSync(join(project, ".dsh", "skills", "proj-demo"), { recursive: true });
+writeFileSync(join(project, ".dsh", "skills", "proj-demo", "SKILL.md"), "---\\nname: proj-demo\\ndescription: 项目技能\\n---\\n\\n正文\\n", "utf8");
+mkdirSync(join(home, ".dsh", "storages"), { recursive: true });
+writeFileSync(join(home, ".dsh", "storages", "workspace.json"), JSON.stringify({ tables: { workspaces: { w1: { path: project, title: "proj" } } } }), "utf8");
+mkdirSync(join(home, ".dsh", "skills", "Odd_Name"), { recursive: true });
+writeFileSync(join(home, ".dsh", "skills", "Odd_Name", "SKILL.md"), "---\\nname: Odd_Name\\ndescription: 名字不合规\\n---\\n\\n正文\\n", "utf8");
+out.roots = await call("/api/skills");
+out.toggleAgents = await post("/api/skills/toggle", { id: "agents-demo", enabled: false });
+out.removeAgents = await post("/api/skills/remove", { id: "agents-demo" });
 console.log("PROBE " + JSON.stringify(out));
 `;
 
@@ -101,7 +119,7 @@ sweepStaleHomes();
 function probeInFreshHome() {
   const home = mkdtempSync(join(tmpdir(), "api-hub-test-"));
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", PROBE], {
-    env: { ...process.env, USERPROFILE: home, HOME: home },
+    env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, "probe failed:\n" + result.stderr);
@@ -166,6 +184,27 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.deepEqual(JSON.parse(out.orderFile).order, ["demo-skill-b", "demo-skill"]);
     assert.equal(out.skillReorderBadType.code, 400);
     assert.equal(out.skillReorderEmpty.code, 400);
+
+    // The list follows DSH's own roots: the project workspace, ~/.agents (a
+    // folder plus a bare .md) and the differences between them.
+    const skills = JSON.parse(out.roots.body).skills;
+    const byId = new Map(skills.map((skill) => [skill.id, skill]));
+    assert.ok(byId.has("proj-demo"), "project skill missing: " + skills.map((s) => s.id).join(","));
+    assert.equal(byId.get("proj-demo").scope, "project");
+    assert.equal(byId.get("agents-demo").scope, "agents");
+    assert.equal(byId.get("lone-skill").scope, "agents");
+    assert.equal(byId.get("lone-skill").files, 1);
+    assert.equal(byId.get("demo-skill").managed, true);
+    assert.equal(byId.get("agents-demo").managed, false);
+    // A name DSH would refuse to load is still listed, but flagged. The probe
+    // renamed demo-skill to 演示 技能 above, which is exactly such a name.
+    assert.equal(byId.get("Odd_Name").dshValidName, false);
+    assert.equal(byId.get("demo-skill").dshValidName, false);
+    assert.equal(byId.get("demo-skill").dshFormat, true);
+    assert.equal(byId.get("proj-demo").dshValidName, true);
+    // The panel only moves files it owns.
+    assert.equal(out.toggleAgents.code, 400);
+    assert.equal(out.removeAgents.code, 400);
 
     assert.equal(existsSync(join(home, ".dsh", "api-hub", "providers.json")), true);
   } finally {
@@ -243,7 +282,7 @@ console.log("VERIFY " + JSON.stringify(out));
 function verifyInFreshHome() {
   const home = mkdtempSync(join(tmpdir(), "api-hub-verify-"));
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", VERIFY], {
-    env: { ...process.env, USERPROFILE: home, HOME: home },
+    env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, "verify probe failed:\n" + result.stderr);
@@ -346,7 +385,7 @@ console.log("VISION " + JSON.stringify(out));
 function visionInFreshHome() {
   const home = mkdtempSync(join(tmpdir(), "api-hub-vision-"));
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", VISION], {
-    env: { ...process.env, USERPROFILE: home, HOME: home },
+    env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, "vision probe failed:\n" + result.stderr);
@@ -460,7 +499,7 @@ function formatsInFreshHome() {
   mkdirSync(scratch, { recursive: true });
   const home = mkdtempSync(join(scratch, "formats-"));
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", FORMATS], {
-    env: { ...process.env, USERPROFILE: home, HOME: home },
+    env: { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, ".dsh"), DSH_AGENTS_HOME: join(home, ".agents") },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, "formats probe failed:\n" + result.stderr);
