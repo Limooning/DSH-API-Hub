@@ -6,94 +6,166 @@
 [![CI](https://github.com/Limooning/DSH-API-Hub/actions/workflows/ci.yml/badge.svg)](https://github.com/Limooning/DSH-API-Hub/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里的**本机 API 与技能管理台**：把散落在各个配置文件里的 API 服务商收进一个面板——看余额、改 Key、选模型、测连通、发调试请求；顺便管理 `~/.dsh/skills` 下的技能。
+跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里的**本机 API 与技能管理台**。
 
-界面是 DSH 侧边栏里的**原生 React 面板**，后端逻辑跑在 **DSH 进程内**、挂在 DSH 自己的 HTTP 服务 `/api-hub` 路由下：不额外开端口、不启子进程、不加载任何网页。面板颜色全部来自 CSS 变量（浅色 / 深色各一份），跟着 DSH 的主题设置一起切换。
+散在各个配置文件里的服务商——官方的、中转的、云厂商的——收进同一个面板：看余额、改 Key、选模型、测连通、发调试请求；顺手管理 DSH 会加载的技能。面板里启用的对话接口会**自动变成 DSH 自己的模型路由**，在对话的模型选择器里直接可选。
 
 ![API Hub 面板](docs/screenshot.png)
 
-## 功能
+## 它是什么形态
 
-**接口页**
+侧边栏里的一行 + 一个原生 React 页面，后端逻辑跑在 **DSH 进程内**，挂在 DSH 自己的 HTTP 服务 `/api-hub` 下：
 
-- **双击标题改名**：面板叫什么都行（存在 `providers.json` 的 `panel.title`），侧边栏标签同步；`Enter` 保存、`Esc` 取消
-- **双击卡片标题改名**：接口叫什么都行，`id` 和 Key 文件不动；`Enter` 保存、`Esc` 取消
-- 服务商卡片：名称、类型、端点、Key 掩码、默认模型、**余额徽章**、连通状态点
-- **类型标签**：每种能力一个独立小标签（`文本` / `视觉` / `图片` / `视频` / `语音` / `向量`）。`视觉` 有实测依据才算数——添加接口时会真的发一张 16×16 的纯红图问「什么颜色」，答得出来才标上，鼠标悬停能看到是实测通过、实测失败还是仅按名字推断（所以 `qwen3.8-max` 这种名字看不出眼睛的模型也能被正确识别）
-- **启用 / 停用**：开关切换；停用只淡化卡片正文，标题和开关保持清晰
-- **测试连接**：用真实 Key 请求一次模型目录，显示状态码 / 耗时 / 模型数
-- **查余额**：按 `balance` 配置查询；没有余额接口的服务商显示 `—`（不编造数字）
-- **双击 Key 修改**：卡片上那行掩码 Key 直接双击就能就地改，粘贴后 `Enter` 保存、`Esc` 取消；失败时输入框保留并显示服务端原话（`.toml` / `.env` 里的 Key 只读不写，会提示你去改原文件）
-- **模型**：拉取模型目录、勾选允许的模型、单选默认模型
-- **默认**：点一下设为默认，再点一下取消；默认服务商用蓝色标出
-- **请求**：GET/POST + JSON 请求体，带 Key 直发，显示状态码、耗时、响应体
-- **移除**：确认后移出面板；面板自己管理的 Key 文件会一并删除
-- **拖拽排序**：拖动卡片调整顺序，写回 `providers.json` 的数组顺序
-- **接入 DSH（自动，无按钮）**：启用中的对话接口会自动注册成 DSH 自己的模型路由（`@deepseek-ai/dsh-llm-pi-ai`），之后在 DSH 对话的模型选择器里直接能选到。面板每次拿到新状态都会和 DSH 的设置章节比一次，**只有不一致时才写一次**，写完提示一行；停用或删掉的接口会从 DSH 的模型列表里一并撤掉，而你自己在「设置 → 模型」里手加的 provider 不会被碰。只接**你在面板里勾选过的**对话模型（没勾过的接口才回落到默认模型或探测缓存；图片 / 视频 / 语音 / 向量模型按名字分类后排除），Key 走 DSH 凭据服务落成 ref，配置通过 settings 服务写入并由 DSH 自己校验、热加载
-- **＋ 添加接口**：填 Base URL 和 Key → 自动探测模型目录 → 每个模型旁标出能力（文本 / 视觉 / 图片 / 视频 / 语音 / 向量，多模态写成「文本 · 视觉」）→ 接口类型不用选，按你勾的模型自动显示（勾了聊天与生图就是「文本 · 图片」，聊天、生图、视频都勾就是「文本 · 图片 · 视频」）→ 全选 / 取消全选后保存
-- **检索本机**：只列出本机已有、面板里还没有的接口与技能。自动扫描只覆盖 DSH 自己的目录，剩下的靠手动添加——
-  - **凭据与环境变量**：`~/.dsh/.credentials.yaml` 的 `refs`、进程环境里的 `*_API_KEY` / `*_KEY`；
-  - **配置文件**：`~/.dsh` 下的 `.json`、`.toml`、`.env`（深度 4），识别 `apiKey` / `api_key` / `*_API_KEY` / `token` 字段，取同级最近的 URL 作为 Base URL，没有 URL 时按字段名或文件名推断厂商；`.example` / `.sample` / `.template` 这类模板文件跳过；
-  - **技能**：DSH 自己的 `~/.dsh/skills`（面板已管理，通常没有新候选）；别的 agent 的技能目录用「添加扫描位置」加一次即可，只要 `SKILL.md` 顶部有 `name` / `description` 就能「复制到 DSH」；`.system` / `.disabled` 这类隐藏目录跳过。
+- 不额外开端口、不起子进程、不加载任何网页、没有 iframe
+- 颜色全部来自 CSS 变量，深色 / 浅色各一份，跟着 DSH 的主题设置一起切
+- 运行时数据都在 `~/.dsh/api-hub/`，仓库里没有任何密钥
 
-  没有写死任何厂商的文件名：DSH 自己的目录自动识别，放在别处（D 盘、其它工具目录）的用「添加扫描位置」指定路径。Key 留在原文件，导入只记录路径与字段（`.toml` / `.env` 只读不写，改 Key 请直接改原文件）。同一个 Key 写在几个文件里只列一行。「扫描范围」默认折叠成一行，点「展开」才出现说明与添加表单。
-- **调通才允许导入**：每一行都会拿它的 Key 真的打一次接口，2xx 才点亮「导入」，调不通的行直接显示原因（`Key 被接口拒绝（HTTP 401）`、`Base URL 不对：…`、`连不上`），服务端写入前还会再验一次。鉴权头同样按实际结果定：`Authorization: Bearer` 被 401/403 拒掉时会改试 `x-api-key` / `api-key`，能通的把这种写法记在 provider 上，之后的测试与请求都照它发。Anthropic 原生（`/v1/messages`）与 Gemini 原生（`models?key=`）协议会被明确告知「面板只调 OpenAI 兼容接口」，而不是假装导入成功。
-
-**技能页**
-
-- 列出 **DSH 会加载的全部技能**：`~/.dsh/skills`、`~/.agents/skills`，以及已打开项目里的 `.dsh/skills` / `.agents/skills`（读 `$DSH_HOME` / `$DSH_AGENTS_HOME`，同一 id 以优先级高的根为准，和 DSH 一致）
-- **只读范围**：项目里和 `~/.agents` 里的技能带「只读」标记，面板不启停、不删除它们，只移动 `~/.dsh/skills` 里的文件
-- **名字不合规会提示**：DSH 只加载 `^[a-z0-9]+(-[a-z0-9]+)*$` 的 `name:`，不符合的卡片会标出来
-- **拖动排序**：直接拖卡片，顺序存在 `~/.dsh/api-hub/skill-order.json`；新技能排在已排序的后面
-- **双击技能名改名**：只改 `SKILL.md` 顶部的 `name:`，描述和正文原样保留，行尾跟随文件（CRLF/LF）
-- **打标签分类**：「标签」里可以新建或勾选已有标签（最多 12 个），存在 `~/.dsh/api-hub/skill-tags.json`，不动技能目录
-- **按标签筛选**：技能页顶部一排标签，点一下就只看这一类，再点取消；还有「未分类」
-- **查看** SKILL.md 原文、**启停**（目录在 `skills/` 与 `skills/.disabled/` 之间移动）、**删除**
+> `package.json` 里的 `dsh.client.platform: "web"` 是 DSH 对「客户端插件」的称呼，指跑在渲染进程里，不是「这是个网页」。
 
 ## 安装
 
-一条命令即可：`dsh plugin` 会把包装进 profile，并**自动把包名登记到 `dsh.profile.bundles`**。
+`dsh plugin` 会把包装进 profile，并自动把包名登记到该 profile 的 `dsh.profile.bundles`：
 
 ```powershell
-# 从 npm（推荐）
-dsh plugin --profile desktop add dsh-api-hub
-
-# 从本地 tarball（Release 附件）
-dsh plugin --profile desktop add C:\path\dsh-api-hub-<版本>.tgz
-
-# 从源码（开发态，改动即时生效）
-dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub
+dsh plugin --profile desktop add dsh-api-hub          # 从 npm
+dsh plugin --profile desktop add C:\path\dsh-api-hub-<版本>.tgz   # 从 Release 附件
+dsh plugin --profile desktop add link:C:\path\to\DSH-API-Hub      # 从源码，改动即时生效
 ```
 
-`--profile` 换成你要装的 profile（`desktop` 是桌面端默认的）。装完**重启 DSH**，左侧边栏「插件」下方会出现 **API Hub**。
+装完**重启 DSH**，左侧边栏「插件」下方出现 **API Hub**。Windows / macOS 命令相同，只有路径写法不同。
 
-Windows 与 macOS 命令一致，只有路径写法不同。代码里没有平台分支，路径都用 `node:path` 拼接，读写位置跟随 `os.homedir()`。
-
-**卸载**：
+卸载：
 
 ```powershell
 dsh plugin --profile desktop remove dsh-api-hub
-# 再从 profile 的 dsh.profile.bundles 里删掉 "dsh-api-hub"，重启
+# 若 profile 的 dsh.profile.bundles 里仍留着 "dsh-api-hub"，手动删掉再重启
 ```
 
-> 本插件不依赖设置页，profile 里 `ui-settings` 开着或关着都不影响它。
+不用 CLI 的话：`cd ~/.dsh/profiles/desktop`，`pnpm add link:<仓库路径>`（或 `pnpm add <tgz 路径>`），把 `"dsh-api-hub"` 加进该 profile `package.json` 的 `dsh.profile.bundles`，重启。
 
-### 手动安装（不用 CLI）
+## 三分钟上手
+
+1. 打开左侧边栏的 **API Hub**
+2. **＋ 添加接口**：填 Base URL 和 Key → 自动拉模型目录，每个模型旁标出能力（文本 / 视觉 / 图片 / 视频 / 语音 / 向量）→ 勾选要开放的模型 → 保存。类型不用选，按勾中的模型自动显示
+3. 回到对话，在模型选择器里就能看到这个接口了
+
+## 接口页
+
+**整理**
+
+- 拖动卡片排序；双击卡片标题改名（`id` 与 Key 文件不动）
+- 启用 / 停用：停用只淡化正文，标题和开关保持清晰
+- 类型标签按能力分列：`文本` `视觉` `图片` `视频` `语音` `向量`，多模态写成「文本 · 视觉」
+- **`视觉` 是实测出来的**：添加时真的发一张 16×16 纯红图问「什么颜色」，答得出来才标上；悬停能看到是实测通过、实测失败，还是仅按名字推断
+
+**密钥与连通**
+
+- Key 掩码显示在卡片上，**双击就地改**：粘贴后 `Enter` 保存，`Esc` 取消；失败时输入框保留并显示服务端原话
+- `.toml` / `.env` 里的 Key 只读不写，会提示你直接改原文件
+- **测试连接**：用真 Key 请求一次模型目录，显示状态码 / 耗时 / 模型数
+- **查余额**：按 `balance` 配置查询；没有余额接口的服务商显示 `—`，不编造数字
+
+**模型与默认**
+
+- **模型**：拉目录、勾选允许的模型、单选默认模型
+- **默认**：点一下设为默认，再点取消；文本与图片各有一个默认
+- 只把这些勾选过的对话模型交给 DSH（见下文）
+
+**调试**
+
+- **请求**：GET / POST + JSON 请求体，带 Key 直发，显示状态码、耗时、响应体
+- **移除**：确认后移出面板，面板自己管理的 Key 文件一并删除
+
+**检索本机**
+
+只列本机已有、面板里还没有的接口与技能：
+
+- 自动扫描**只覆盖 DSH 自己的目录**——凭据库 `refs`、环境变量里的 `*_API_KEY` / `*_KEY`、`$DSH_HOME` 下的 JSON / TOML / `.env`
+- 放在别处的（D 盘、别的工具目录）用「扫描范围 → 手动导入」加一次路径；Key 仍留在原文件，只记录位置与字段
+- **调通才允许导入**：每行都会拿它的 Key 真打一次接口，2xx 才点亮「导入」；调不通直接显示原因（`Key 被接口拒绝（HTTP 401）`、`Base URL 不对`、`连不上`），服务端写入前还会再验一次
+- 鉴权头按实测结果定：`Authorization: Bearer` 被 401/403 拒掉时改试 `x-api-key` / `api-key`，能通的写法记在 provider 上
+- Anthropic 原生（`/v1/messages`）与 Gemini 原生（`models?key=`）会明确告知「面板只调 OpenAI 兼容接口」，不假装成功
+
+## 技能页
+
+- 列出 **DSH 会加载的全部技能**：`$DSH_HOME/skills`、`$DSH_AGENTS_HOME/skills`，以及已打开项目里的 `.dsh/skills`、`.agents/skills`——同一 id 以优先级高的根为准，与 DSH 的加载顺序一致
+- **只读范围**：项目和 `~/.agents` 里的技能带「只读」标记，面板不启停、不删除，只动 `$DSH_HOME/skills` 里的
+- **名字不合规会提示**：DSH 只加载 `^[a-z0-9]+(-[a-z0-9]+)*$` 的 `name:`
+- **拖动排序**：顺序存在 `~/.dsh/api-hub/skill-order.json`，新技能排在已排序的后面
+- **双击改名**：只改 `SKILL.md` 顶部的 `name:`，描述与正文原样保留，行尾跟随文件（CRLF / LF）
+- **打标签分类**：最多 12 个标签，存在 `~/.dsh/api-hub/skill-tags.json`，不动技能目录；顶部可按标签筛选，包括「未分类」
+- **查看** SKILL.md 原文、**启停**（在 `skills/` 与 `skills/.disabled/` 之间移动）、**删除**
+
+## 和 DSH 的关系
+
+### 模型自动接入，没有按钮
+
+每次拿到新状态，面板都会和 DSH 的 `llm-pi-ai` 设置章节比一次：
+
+- 启用中的对话接口注册成 DSH 的模型路由，写完 DSH 自己校验并热加载
+- **只有不一致时才写一次**；停用或删掉的接口会从 DSH 模型列表里一并撤掉
+- 你在「设置 → 模型」里手加的 provider 不会被碰：只动面板自己拥有的那几条
+- 只接你勾选过的对话模型；图片 / 视频 / 语音 / 向量按名字分类后排除
+- Key 通过 DSH 凭据服务落成 ref，不落到配置文件里
+
+### 兼容范围
+
+`package.json` 声明了 `engines.dsh`：
+
+```json
+"engines": { "dsh": ">=0.2.1-rc.2 <0.3.0-0" }
+```
+
+DSH 安装时会拿它和运行时版本比对，不满足直接拒绝安装（`incompatible-version`），不会先装进去再出问题。所以这个范围写保守：只在真的对着新版跑过之后才放宽。
+
+面板页头右上角显示 `DSH <版本> · v<插件版本>`，悬停可看声明的范围；对不上时页头下方出一条红字，而不是让接口悄悄调不通。数据来自 `/api/health` 的 `plugin` 与 `dsh` 字段（`dsh.version` 为 `null` 表示当前环境读不到，此时不报警）。
+
+发布前和每周一 CI 都会跑：
 
 ```powershell
-cd ~/.dsh/profiles/desktop
-pnpm add link:<仓库路径>        # 或 pnpm add <tgz 路径>
-# 再把 "dsh-api-hub" 加进该 profile package.json 的 dsh.profile.bundles
-# 重启 DSH
+npm run check:dsh
+# ok: @deepseek-ai/dsh@<版本> satisfies engines.dsh ">=0.2.1-rc.2 <0.3.0-0"
 ```
 
-首次运行时，后端会在 `~/.dsh/api-hub/` 下自动创建 `providers.json`（从包内的 `providers.example.json` 复制），之后面板的改动都写在这个文件里。
+它去 registry 取 `@deepseek-ai/dsh` 的 `latest`，用与 DSH 同一套规则比对：落在范围外就以非零退出码失败（提示先手工装新版试一遍再放宽）；网络不通只警告，不判红。
 
-## 配置
+### 主题
 
-### providers.json
+面板的颜色全部是 CSS 变量（`--ahb-*`），浅色在 `body`、深色在 `body[data-ds-dark-theme]` 各给一份。DSH 切换主题时浏览器直接重算，不需要监听事件或重建组件。
 
-面板的注册表，默认在 `~/.dsh/api-hub/providers.json`（**不进版本库**）。首次运行时若文件不存在，会自动从包内的 `providers.example.json` 复制一份；它只有一个 DeepSeek 官方文本服务商，可以照它改：
+### 为什么入口在侧边栏，而不是设置页
+
+DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律回退成齿轮，且 `settings.section` 没有 `icon` 字段；而 `sidebar.panellist` 的第二个参数就是图标组件。所以本插件只注册侧边栏席位，不在设置页留一个重复条目。上游需求整理在 [`docs/upstream/settings-section-icon.md`](docs/upstream/settings-section-icon.md)。
+
+## 数据存在哪
+
+全部在 `~/.dsh/api-hub/`（随 `$DSH_HOME` 走），都不进版本库：
+
+| 文件 | 内容 |
+|---|---|
+| `providers.json` | 注册表：服务商、默认项、模型选择、缓存 |
+| `keys/<id>.json` | 面板添加的接口的 Key |
+| `dsh-routes.json` | 面板写进 DSH 的路由清单（用来判断能否安全撤掉） |
+| `skill-order.json` | 技能排序 |
+| `skill-tags.json` | 技能标签 |
+| `scan-sources.json` | 手动添加的扫描位置 |
+
+首次运行时 `providers.json` 不存在会自动从包内的 `providers.example.json` 复制一份（只含 DeepSeek 官方）。
+
+### Key 存哪里
+
+由 `keySource.type` 决定，面板只负责读写：
+
+| 类型 | 位置 |
+|---|---|
+| `dsh-credentials` | DSH 凭据库的 `refs.<ref>`，写入交给 `ctx.credentials`（持锁、原子落盘、广播更新） |
+| `json` | 任意 JSON 文件的某个字段（`path` + `jsonPath`） |
+| `env` | 环境变量名，适合从 shell 传 Key |
+| 面板添加的接口 | `~/.dsh/api-hub/keys/<id>.json` 的 `apiKey` |
+
+写入是就地更新：`refs` 之外的记录、JSON 的其它字段与缩进风格都保留，值没变时文件逐字节不变。
+
+### providers.json 参考
 
 ```jsonc
 {
@@ -103,10 +175,9 @@ pnpm add link:<仓库路径>        # 或 pnpm add <tgz 路径>
       "id": "deepseek-api",
       "name": "DeepSeek 官方",
       "kind": "llm",                          // llm | image
-      "tag": "文本",
       "enabled": true,
       "baseURL": "https://api.deepseek.com",
-      "protocol": "OpenAI Responses",         // 仅展示用
+      "protocol": "OpenAI Responses",         // 仅展示
       "keySource": { "type": "dsh-credentials", "ref": "DEEPSEEK_API_KEY" },
       "test": { "method": "GET", "path": "/models" },
       "defaultModel": "deepseek-flash",
@@ -122,181 +193,70 @@ pnpm add link:<仓库路径>        # 或 pnpm add <tgz 路径>
 }
 ```
 
-可选字段：
-
 | 字段 | 含义 |
 |---|---|
 | `enabled` | 是否启用；缺省视为启用 |
-| `selectedModels` | 允许调用的模型 id 数组；不写 = 全部 |
+| `selectedModels` | 允许调用的模型 id；不写 = 全部 |
 | `defaultModel` | 默认模型，必须在 `selectedModels` 里 |
-| `balance` | 余额查询：`extract` 是从响应 JSON 取值的路径 |
-| `modelsCache` | 面板拉取模型后的缓存（自动写入） |
-
-### Key 存哪里
-
-由 `keySource.type` 决定，面板只负责读写：
-
-| 类型 | 位置 |
-|---|---|
-| `dsh-credentials` | DSH 凭据库 `~/.dsh/.credentials.yaml` 的 `refs.<ref>` |
-| `json` | 任意 JSON 文件的某个字段（`path` + `jsonPath`） |
-| `env` | 环境变量名（`name`），适合从 shell 里传 Key 的场景 |
-| 面板添加的接口 | 默认 `~/.dsh/api-hub/keys/<id>.json` 的 `apiKey` |
-
-写入是**就地更新**：`refs` 之外的记录、JSON 的其它字段与缩进风格都保留；值没变时文件逐字节不变。
-
-## 架构
-
-```
-DSH 进程
-├─ lib/index.js                 宿主半侧
-│   ├─ 懒加载 lib/server.mjs 的 handleRequest（文件变更自动重载）
-│   ├─ ctx.inject(['webServer']) → register({ kind: 'prefix', path: '/api-hub' })
-│   └─ webserver/index-inject   → 注入 window.__API_HUB_ORIGIN__
-│
-└─ lib/server.mjs 的 handleRequest()   进程内，无子进程
-
-渲染进程（Electron 里跑 React 的那一层，等同于 DSH 自己的界面）
-└─ lib/client.js                客户端半侧
-    ├─ sidebar.panellist → 侧边栏那一行 + 枢纽图标
-    ├─ main              → 点开后的整页
-    └─ 后端地址：同源（http 页面）→ 注入的 origin → 相对路径，取第一个可用的
-```
-
-界面与宿主之间只通过 `/api-hub/api/*` 这层内部 HTTP 传数据（`state`、`test`、`key`、`models`、`balance`、`enabled`、`default`、`request`、`skills` 等）。这层路由由 DSH 自己的服务提供，不监听任何额外端口。
-
-> `package.json` 里的 `dsh.client.platform: "web"` 是 **DSH 对客户端插件的称呼**，指“跑在渲染进程/Web 运行时里”，不是“这是一个网页”。dshmarket 也是同一个值。插件没有 iframe、没有独立页面、不加载任何 URL。
-
-### 为什么入口在侧边栏，而不是设置页
-
-DSH 的设置页导航图标按分区 id **硬编码**，第三方分区一律回退成齿轮，且 `settings.section` 没有 `icon` 字段；而 `sidebar.panellist` 的第二个参数就是图标组件。所以本插件只注册侧边栏席位，不在设置页留一个带齿轮的重复条目。
-
-上游需求已整理成可直接提交的 issue：[`docs/upstream/settings-section-icon.md`](docs/upstream/settings-section-icon.md)。
-
-## 版本与更新
-
-### 和 DSH 本体的兼容范围
-
-`package.json` 里声明了 `engines.dsh`：
-
-```json
-"engines": { "dsh": ">=0.2.1-rc.2 <0.3.0-0" }
-```
-
-DSH 安装插件时会拿它和运行时版本比对，不满足就直接拒绝安装（`incompatible-version`），不会先装进去再出问题。所以这个范围写保守一点：只在真的对着新版试过之后放宽。
-
-面板页头右上角会显示 `DSH 0.2.1-rc.2 · v0.7.8`，鼠标悬停能看到插件声明的范围；真的对不上时，页头下面会出一条红字说明，而不是让接口悄悄调不通。数据来自 `/api/health` 的 `plugin` 与 `dsh` 两个字段（`dsh.version` 为 `null` 表示当前环境读不到版本，此时不报警）。
-
-发布前、以及每周一 CI 都会跑一次：
-
-```powershell
-npm run check:dsh
-# ok: @deepseek-ai/dsh@0.2.1-rc.2 satisfies engines.dsh ">=0.2.1-rc.2 <0.3.0-0" (plugin 0.7.8)
-```
-
-它去 registry 取 `@deepseek-ai/dsh` 的 `latest`，用和 DSH 同一套规则比对：落在范围外就以非零退出码失败（提示先手工装新版试一遍再放宽范围），网络不通只警告不判红。
-
-版本号只写在 `package.json` 与 [`CHANGELOG.md`](CHANGELOG.md) 里，README 不单独记一份——上面的 npm 徽章和 [Releases](https://github.com/Limooning/DSH-API-Hub/releases) 页会自动跟着走，省得改漏。每个版本都打 tag，`git tag -n` 可以看到全部；推一个 `v*` tag 后，GitHub Actions 会自动打包并创建 Release（附 `.tgz`）。
-
-```powershell
-# 更新到最新
-cd ~/.dsh/api-hub
-git pull --ff-only
-
-# 查看有哪些版本 / 某个版本改了什么
-git tag -n
-git show v0.2.0 --stat
-```
-
-想临时跑某个旧版本，用 `worktree` 开一个并行副本，不影响正在用的那份：
-
-```powershell
-git worktree add ../api-hub-v0.2.0 v0.2.0
-# 把 profile 里的 link 指向 ../api-hub-v0.2.0/plugin，重启 DSH
-git worktree remove ../api-hub-v0.2.0    # 用完清理
-```
-
-发布新版本的流程（仓库公开后**不要 force push**）：
-
-```powershell
-# 1) 改代码、正常提交
-git commit -am "feat: ..."
-
-# 2) 改 package.json 的 version，然后打 tag
-git tag -a v0.2.1 -m "v0.2.1 — 变更说明"
-
-# 3) 推送提交和 tag
-git push
-git push origin v0.2.1
-```
+| `balance` | 余额查询，`extract` 是从响应 JSON 取值的路径 |
+| `modelsCache` | 拉取模型后的缓存（面板自动写入） |
 
 ## 开发
 
-不需要构建，改完按下面的方式生效：
+不需要构建：
 
 | 改什么 | 生效方式 |
 |---|---|
-| `lib/server.mjs`（后端） | 宿主按 mtime 自动重新 import，**刷新页面即生效** |
-| `lib/client.js`（界面） | 保存后刷新页面；若没变化，重启 DSH（客户端模块图在启动时确定） |
+| `lib/server.mjs`（后端） | 宿主按 mtime 自动重新 import，刷新页面即生效 |
+| `lib/client.js`（界面） | 保存后刷新；没变化就重启 DSH（客户端模块图在启动时确定） |
 | `lib/index.js`（宿主半侧） | 需要重启 DSH |
-
-改完先做语法检查，再跑冒烟测试：
 
 ```powershell
 node --check lib/server.mjs
 node --check lib/index.js
 node --check lib/client.js
-npm test          # 用临时 HOME 跑后端：播种、健康检查、404、技能空目录
+npm test          # 每个用例在子进程里用一次性 HOME 跑，不碰你的数据
+npm run check:dsh # 声明的 DSH 范围是否还覆盖最新发布
 ```
 
-测试不会碰你的 `~/.dsh/api-hub/providers.json`——每个用例在子进程里用一次性 HOME 运行。
+CI 在 Windows / macOS / Linux × Node 20/22 上跑同一套检查，外加一个每周的 `dsh-compat` 任务（`.github/workflows/ci.yml`）。
 
-CI 在 Windows / macOS / Linux × Node 20/22 上跑同一套检查（`.github/workflows/ci.yml`）。
+想在不碰日常环境的前提下试：复制一个 profile，装好插件后 `dsh --profile lab --port 17899 --no-open`。
 
-想在不碰日常环境的前提下试插件，可以复制一个 profile 出来单独跑：
+### 目录结构
 
-```powershell
-# 复制 desktop profile 为 lab，装好插件后：
-dsh --profile lab --port 17899 --no-open
-```
-
-## 相关文档
-
-- [故障排查](docs/troubleshooting.md) — 面板连不上、侧边栏没入口、安装报错
-- [变更记录](CHANGELOG.md)
-- [安全说明](SECURITY.md) — 回环/鉴权的取舍，如何私下报告问题
-- [发布指引](docs/publish.md) — npm 发布与版本流程（维护者用）
-- [上架材料](docs/market-entry.md) — 插件市场 PR 的条目内容与要求
-- [上游需求](docs/upstream/settings-section-icon.md) — 让设置分区支持自定义图标
-
-## 目录结构
-
-仓库根目录就是 npm 包，`pnpm add link:<仓库路径>` 直接可用：
+仓库根目录就是 npm 包：
 
 ```
-package.json                插件清单：dsh.bundle.patch + dsh.client
+package.json                插件清单：dsh.bundle.patch + dsh.client + engines.dsh
 cordis.patch.yml            自带 patch 层，插入 api-hub-plugin 条目
-lib/index.js                宿主半侧：挂路由、注入 origin
+lib/index.js                宿主半侧：挂路由、注入 origin、把 DSH 服务接给后端
 lib/client.js               客户端半侧：侧边栏入口 + 原生面板
-lib/server.mjs              后端：providers / 余额 / 模型 / 技能，全部逻辑
-providers.example.json      注册表示例（只含 DeepSeek 官方），首次运行自动复制
+lib/server.mjs              后端：providers / 余额 / 模型 / 技能 / 检索 / 接入 DSH
+scripts/check-dsh-compat.mjs 发布前的兼容性检查
+test/smoke.test.mjs         一次性 HOME 里的冒烟测试
+providers.example.json      注册表示例，首次运行自动复制
 assets/icon.svg             枢纽标记（纯色，跟随主题）
-docs/upstream/              上游需求文档
-.github/workflows/          打 tag 时自动打包并发布 Release
 ```
-
-运行时数据不在仓库里：`providers.json`、`keys/` 都被 `.gitignore` 挡住。
 
 ## 已知限制
 
-- **设置页没有入口**：如上所述，图标只能是齿轮，所以只保留侧边栏入口
-- **没有配置 schema**：端口、刷新间隔等目前是代码里的常量，未接入 `cordis.patch.yml` 的 `config`
-- **密钥写入走 `ctx.credentials`（读到的是文件）**：`dsh-credentials` 类型的 Key 改动会交给 DSH 的凭据服务写入——它持有该文件的锁、原子落盘并广播 `credentials/reference-updated`，所以改完不需要重启；只有在这个 profile 没有组装凭据服务时，才退回直接写文件。读取仍是同步读那份 YAML（服务监视的就是同一个文件，两边看到的是同一份内容）
-- **依赖 `webServer` 服务**：拿不到该服务时面板无法工作（不会退化成子进程）
-- **本地回环、无鉴权**：面板只挂在 DSH 的 `127.0.0.1` 上，外部机器连不上；但同一浏览器里的网页可以读取 `/api-hub/api/*` 的响应（CORS 通配）。所以不要为了远程访问把 DSH 绑定到 `0.0.0.0` 后暴露在不可信网络里——那种场景需要额外的 token 校验，目前没有
+- **设置页没有入口**：图标只能是齿轮，所以只保留侧边栏入口
+- **没有配置 schema**：刷新间隔等仍是代码里的常量，未接入 `cordis.patch.yml` 的 `config`
+- **依赖 `webServer` 服务**：拿不到该服务时面板无法工作，不会退化成子进程
+- **本地回环、无鉴权**：只挂在 `127.0.0.1` 上，外部机器连不上；但同一浏览器里的网页能读 `/api-hub/api/*` 的响应（CORS 通配）。不要把 DSH 绑到 `0.0.0.0` 后暴露在不可信网络里——那种场景需要额外的 token 校验，目前没有
 - **只在 Windows 上实测过**：代码无平台分支，macOS 未验证
 
-遇到“面板打不开 / 显示找不到面板服务”，见 [故障排查](docs/troubleshooting.md)。
+遇到「面板打不开 / 显示找不到面板服务」，见 [故障排查](docs/troubleshooting.md)。
+
+## 文档
+
+- [变更记录](CHANGELOG.md)
+- [故障排查](docs/troubleshooting.md)
+- [安全说明](SECURITY.md) — 回环与鉴权的取舍，如何私下报告问题
+- [发布指引](docs/publish.md) — npm 发布与版本流程（维护者用）
+- [上架材料](docs/market-entry.md) — 插件市场 PR 的条目内容与要求
+- [上游需求](docs/upstream/settings-section-icon.md) — 让设置分区支持自定义图标
 
 ## License
 
