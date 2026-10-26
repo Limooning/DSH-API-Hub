@@ -450,6 +450,13 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.deepEqual(renamedSkills.find((s) => s.id === "demo-skill-b").tags, ["码字", "设计"]);
     assert.deepEqual(JSON.parse(out.tagsFileAfterRename)["demo-skill"], ["码字", "图像"]);
     assert.deepEqual(JSON.parse(out.tagsFileAfterRename)["demo-skill-b"], ["码字", "设计"]);
+    // The promise is that a rename only re-files tags: the skill files stay as
+    // they were, including the name changed earlier by /api/skills/rename.
+    assert.equal(
+      readFileSync(join(home, ".dsh", "skills", "demo-skill", "SKILL.md"), "utf8"),
+      out.skillMd,
+      "renaming a tag must not touch the skill file",
+    );
 
     // Landing on a label that already exists merges the two instead of leaving
     // two chips that look the same but filter separately.
