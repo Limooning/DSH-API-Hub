@@ -117,6 +117,9 @@ test('every exported component renders without throwing', () => {
     'ProviderCard while disabled': () => C.ProviderCard({ provider: { ...PROVIDER, enabled: false }, balances: {} }),
     Switch: () => C.Switch({ on: true, onChange() {} }),
     SkillRow: () => C.SkillRow({ skill: { id: 'demo', name: 'Demo', enabled: true, tags: ['x'], scope: 'global' } }),
+    'SkillRow with a renameable tag': () => C.SkillRow({ skill: { id: 'demo', name: 'Demo', enabled: true, tags: ['x'], scope: 'global' }, onTagRename: async () => '' }),
+    TagChip: () => C.TagChip({ tag: '生图', label: '生图 3', style: {}, onFilter() {}, onRename: async () => '' }),
+    'TagChip without actions': () => C.TagChip({ tag: '生图', label: '生图', style: {} }),
     EmptyState: () => C.EmptyState({ title: '空', hint: '还没有东西' }),
   };
   for (const [label, render] of Object.entries(cases)) {

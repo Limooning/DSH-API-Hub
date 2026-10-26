@@ -174,6 +174,20 @@ useCredentialService(null);
 out.skillMd = readFileSync(join(skillDir, "SKILL.md"), "utf8");
 out.tagsFile = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
 
+// A tag is a shared filing label, not a property of one card: renaming it must
+// reach every skill carrying it, and a name that already exists must merge.
+out.skillTagsBoth = await post("/api/skills/tags", { id: "demo-skill", tags: ["写作", "图像"] });
+out.skillTagsOther = await post("/api/skills/tags", { id: "demo-skill-b", tags: ["写作", "设计"] });
+out.tagRename = await post("/api/skills/tags/rename", { from: "写作", to: "码字" });
+out.afterTagRename = await call("/api/skills");
+out.tagsFileAfterRename = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
+out.tagRenameMerge = await post("/api/skills/tags/rename", { from: "码字", to: "设计" });
+out.tagsFileAfterMerge = readFileSync(join(home, ".dsh", "api-hub", "skill-tags.json"), "utf8");
+out.tagRenameEmpty = await post("/api/skills/tags/rename", { from: "设计", to: "  " });
+out.tagRenameNoFrom = await post("/api/skills/tags/rename", { from: "", to: "x" });
+out.tagRenameUnknown = await post("/api/skills/tags/rename", { from: "没有这个标签", to: "x" });
+out.tagRenameSame = await post("/api/skills/tags/rename", { from: "设计", to: "设计" });
+
 // The roots DSH itself walks: a project workspace, the shared ~/.agents folder,
 // a bare single-file skill, and a name DSH would refuse to load.
 const agents = join(home, ".agents", "skills");
@@ -423,6 +437,38 @@ test("a fresh home gets a seeded registry and healthy routes", () => {
     assert.equal(out.skillTagsCleared.code, 200);
     assert.deepEqual(JSON.parse(out.tagsFile)["demo-skill"], undefined);
     assert.equal(out.skillTagsUnknown.code, 404);
+
+    // A tag rename is a filing edit, not a per-card tweak: both skills move to
+    // the new name in one call, the file agrees, and the old label is gone.
+    assert.equal(out.tagRename.code, 200);
+    const renamedBody = JSON.parse(out.tagRename.body);
+    assert.equal(renamedBody.changed, 2);
+    assert.equal(renamedBody.merged, false);
+    assert.equal(renamedBody.tags.includes("写作"), false);
+    const renamedSkills = JSON.parse(out.afterTagRename.body).skills;
+    assert.deepEqual(renamedSkills.find((s) => s.id === "demo-skill").tags, ["码字", "图像"]);
+    assert.deepEqual(renamedSkills.find((s) => s.id === "demo-skill-b").tags, ["码字", "设计"]);
+    assert.deepEqual(JSON.parse(out.tagsFileAfterRename)["demo-skill"], ["码字", "图像"]);
+    assert.deepEqual(JSON.parse(out.tagsFileAfterRename)["demo-skill-b"], ["码字", "设计"]);
+
+    // Landing on a label that already exists merges the two instead of leaving
+    // two chips that look the same but filter separately.
+    assert.equal(out.tagRenameMerge.code, 200);
+    const mergedBody = JSON.parse(out.tagRenameMerge.body);
+    assert.equal(mergedBody.merged, true);
+    assert.equal(mergedBody.changed, 2);
+    assert.equal(mergedBody.tags.includes("码字"), false);
+    assert.equal(mergedBody.tags.includes("设计"), true);
+    assert.deepEqual(JSON.parse(out.tagsFileAfterMerge)["demo-skill"], ["设计", "图像"]);
+    assert.deepEqual(JSON.parse(out.tagsFileAfterMerge)["demo-skill-b"], ["设计"]);
+
+    // Blank names, a missing source label and a no-op rename each get an answer
+    // the caller can show without guessing what happened.
+    assert.equal(out.tagRenameEmpty.code, 400);
+    assert.equal(out.tagRenameNoFrom.code, 400);
+    assert.equal(out.tagRenameUnknown.code, 404);
+    assert.equal(out.tagRenameSame.code, 200);
+    assert.equal(JSON.parse(out.tagRenameSame.body).changed, 0);
 
     // Dragged order is stored beside the tags and wins over the alphabetical
     // default; ids that no longer exist are dropped instead of being kept.

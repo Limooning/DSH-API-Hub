@@ -96,6 +96,7 @@ dsh plugin --profile desktop remove dsh-api-hub
 - **拖动排序**：顺序存在 `~/.dsh/api-hub/skill-order.json`，新技能排在已排序的后面
 - **双击改名**：只改 `SKILL.md` 顶部的 `name:`，描述与正文原样保留，行尾跟随文件（CRLF / LF）
 - **打标签分类**：最多 12 个标签，存在 `~/.dsh/api-hub/skill-tags.json`，不动技能目录；顶部可按标签筛选，包括「未分类」
+- **标签双击改名**：顶部的标签筛选和技能卡片上的标签都能双击改名，`Enter` 保存、`Esc` 取消；改名作用于所有挂这个标签的技能，新名字已被占用时合并成一个
 - **查看** SKILL.md 原文、**启停**（在 `skills/` 与 `skills/.disabled/` 之间移动）、**删除**
 
 ## DSH 模型页（只读镜像）
